@@ -1,0 +1,19 @@
+{
+  "name": "nocode-preview-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Backend proxy giữ AWS credentials cho NoCode Preview",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudfront": "^3.799.0",
+    "@aws-sdk/client-s3": "^3.799.0",
+    "@aws-sdk/s3-request-presigner": "^3.799.0",
+    "cors": "2.8.5",
+    "dotenv": "16.4.5",
+    "express": "4.21.2",
+    "multer": "1.4.5-lts.1"
+  }
+}
