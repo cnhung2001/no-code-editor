@@ -6,11 +6,12 @@
   "description": "NoCode Preview — S3 DivKit Layout Manager nhúng DivKit Visual Editor",
   "scripts": {
     "dev": "vite",
+    "dev:readonly": "vite --mode readonly --port 5174",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "server": "node server/index.mjs",
-    "dev:all": "concurrently -k \"npm:server\" \"npm:dev\""
+    "dev:all": "concurrently -k \"npm:server\" \"npm:dev\" \"npm:dev:readonly\""
   },
   "dependencies": {
     "@divkitframework/visual-editor": "file:../divkit/visual-editor",

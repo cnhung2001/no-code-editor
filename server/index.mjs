@@ -27,7 +27,14 @@ const {
     PRESIGN_TTL = '900',
     CLOUDFRONT_DISTRIBUTION_ID = '',
     USE_S3_VERSIONING = 'true',
-    CORS_ORIGIN = 'http://localhost:5173'
+    CORS_ORIGIN = 'http://localhost:5173',
+    // ── Machine translation (i18n auto-translate) ──
+    // 'stub'     → trả "[locale] text" (mặc định, không gọi API ngoài)
+    // 'rc-admin' → gọi service MT của rc-admin (bulk-suggest)
+    MT_PROVIDER = 'stub',
+    RC_ADMIN_BASE_URL = '',
+    RC_ADMIN_TOKEN = '',
+    RC_ADMIN_PROJECT_ID = ''
 } = process.env;
 
 const s3 = new S3Client({ region: AWS_REGION });
@@ -265,6 +272,107 @@ app.post('/api/publish', async (req, res) => {
     }
 });
 
+// ── Machine translation: dịch 1 chuỗi sang nhiều locale ────────────────────
+// Provider pluggable qua env MT_PROVIDER. Editor gọi để auto-điền locale_ dict.
+// LƯU Ý: chỉ dùng như engine dịch (trả gợi ý); KHÔNG ghi vào DB i18n của rc-admin.
+
+// stub: mirror 'noop' của rc-admin — trả placeholder, cho UI chạy khi chưa nối service.
+function translateStub(text, targets) {
+    const translations = {};
+    for (const loc of targets) translations[loc] = `[${loc}] ${text}`;
+    return translations;
+}
+
+// google: endpoint dịch free (không cần key). 1 target/lần → chạy song song có giới hạn.
+// Một số mã ngôn ngữ cần map cho Google.
+const GOOGLE_LANG_MAP = { zh: 'zh-CN', he: 'iw', nb: 'no' };
+async function translateOneGoogle(text, from, to) {
+    const tl = GOOGLE_LANG_MAP[to] || to;
+    const sl = GOOGLE_LANG_MAP[from] || from;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`google ${r.status}`);
+    const data = await r.json();
+    // data[0] = mảng segment [ [đã_dịch, gốc, …], … ] → nối lại.
+    return (data[0] || []).map((seg) => seg[0]).filter(Boolean).join('');
+}
+async function translateGoogle(text, from, targets) {
+    const out = {};
+    const CONCURRENCY = 6;
+    let idx = 0;
+    async function worker() {
+        while (idx < targets.length) {
+            const to = targets[idx++];
+            try {
+                out[to] = await translateOneGoogle(text, from, to);
+            } catch {
+                // bỏ qua ngôn ngữ lỗi → để trống, không chặn cả batch
+            }
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
+    return out;
+}
+
+// rc-admin: gọi POST /v1/projects/:pid/i18n/bulk-suggest.
+// ⚠ Payload/response dưới đây là DỰ KIẾN — chỉnh lại đúng DTO khi có mt.controller.ts.
+async function translateRcAdmin(text, from, targets, opts) {
+    const base = RC_ADMIN_BASE_URL.replace(/\/$/, '');
+    const url = `${base}/v1/projects/${RC_ADMIN_PROJECT_ID}/i18n/bulk-suggest`;
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(RC_ADMIN_TOKEN ? { Authorization: `Bearer ${RC_ADMIN_TOKEN}` } : {})
+        },
+        // TODO(schema): map đúng field khi có DTO của bulk-suggest.
+        body: JSON.stringify({
+            sourceLocale: from,
+            targetLocales: targets,
+            items: [{ key: 'inline', source: text }],
+            tone: opts?.tone,
+            maxLength: opts?.maxLength
+        })
+    });
+    if (!resp.ok) throw new Error(`rc-admin ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    // TODO(schema): trích đúng theo response thật. Dạng dự kiến:
+    //   { results: [{ key, translations: { <locale>: <text> } }] }
+    const translations = data?.results?.[0]?.translations || data?.translations || {};
+    return translations;
+}
+
+app.post('/api/translate', async (req, res) => {
+    const { text, from = 'en', targets, tone, maxLength } = req.body || {};
+    if (!text || !Array.isArray(targets) || !targets.length) {
+        return res.status(400).send('thiếu text hoặc targets[]');
+    }
+    // Không dịch về chính ngôn ngữ nguồn.
+    const tgts = targets.filter((l) => l && l !== from);
+    try {
+        let translations;
+        // Fallback về stub nếu chọn rc-admin nhưng chưa cấu hình (mirror pattern của rc-admin).
+        if (MT_PROVIDER === 'rc-admin' && RC_ADMIN_BASE_URL && RC_ADMIN_PROJECT_ID) {
+            translations = await translateRcAdmin(text, from, tgts, { tone, maxLength });
+        } else if (MT_PROVIDER === 'google') {
+            translations = await translateGoogle(text, from, tgts);
+        } else {
+            translations = translateStub(text, tgts);
+        }
+        res.json({ translations });
+    } catch (e) {
+        res.status(502).send(String(e.message || e));
+    }
+});
+
+// Thông tin provider MT hiện tại (để UI hiển thị/nhận biết stub vs thật).
+app.get('/api/translate/info', (_req, res) => {
+    let provider = 'stub';
+    if (MT_PROVIDER === 'rc-admin' && RC_ADMIN_BASE_URL && RC_ADMIN_PROJECT_ID) provider = 'rc-admin';
+    else if (MT_PROVIDER === 'google') provider = 'google';
+    res.json({ provider });
+});
+
 app.listen(Number(PORT), () => {
-    console.log(`NoCode Preview S3 proxy → http://localhost:${PORT} (bucket: ${S3_BUCKET}, region: ${AWS_REGION})`);
+    console.log(`NoCode Preview S3 proxy → http://localhost:${PORT} (bucket: ${S3_BUCKET}, region: ${AWS_REGION}) · MT=${MT_PROVIDER}`);
 });

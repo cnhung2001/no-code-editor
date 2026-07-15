@@ -6,6 +6,7 @@ import { DivProEditor } from '@divkitframework/visual-editor';
 import type { DivProEditorInstance } from '@divkitframework/visual-editor';
 import '@divkitframework/visual-editor/dist/divkit-editor.css';
 import { s3 } from '../s3';
+import { translate } from '../mt';
 import { FILE_LIMITS, VIEWPORT_LIST, CUSTOM_ACTIONS } from './editorConfig';
 
 export interface DivEditorHandle {
@@ -56,6 +57,10 @@ export const DivEditor = forwardRef<DivEditorHandle, Props>(function DivEditor(
                 async uploadFile(file: File) {
                     // Ảnh kéo-thả trong editor → đẩy lên <project>/assets/
                     return s3.uploadAsset(project, file);
+                },
+                // Localize: dịch 1 chuỗi nguồn sang nhiều locale (engine ở backend).
+                async translate(text: string, from: string, targets: string[]) {
+                    return translate(text, from, targets);
                 },
                 onChange() {
                     onChange?.();

@@ -40,6 +40,7 @@ declare module '@divkitframework/visual-editor' {
         api?: {
             uploadFile?(file: File): Promise<string>;
             onChange?(): void;
+            translate?(text: string, from: string, targets: string[]): Promise<Record<string, string>>;
         };
     }
     export const DivProEditor: {

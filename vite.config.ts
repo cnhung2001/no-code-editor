@@ -21,7 +21,9 @@ export default defineConfig({
         }
     },
     optimizeDeps: {
-        // Editor lib là ESM đã bundle sẵn (Svelte + DivKit) — để Vite tự xử lý
-        include: ['@divkitframework/visual-editor']
+        // Editor lib là ESM đã bundle sẵn (Svelte + DivKit, deps rỗng). EXCLUDE khỏi
+        // pre-bundle: mỗi lần rebuild lib (dist đổi) sẽ KHÔNG gây lệch chunk cache
+        // ("chunk-XXXX.js ... does not exist"). Vite phục vụ trực tiếp dạng ESM.
+        exclude: ['@divkitframework/visual-editor']
     }
 });
