@@ -143,7 +143,10 @@
       "Bash(curl -s \"http://localhost:5174/src/config.ts\")",
       "Bash(kill 39804)",
       "Bash(lsof -nP -iTCP:5173,5174,5175,5176,8787 -sTCP:LISTEN)",
-      "Bash(curl -s \"http://localhost:8787/api/list?prefix=printer/\")"
+      "Bash(curl -s \"http://localhost:8787/api/list?prefix=printer/\")",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "Bash(curl -s \"http://localhost:5173/src/editor/resolveAssets.ts\")",
+      "Bash(git add *)"
     ],
     "additionalDirectories": [
       "/Volumes/DiepDB/upload_icon_to_s3/Remote Config/divkit/visual-editor/src/lib/data",

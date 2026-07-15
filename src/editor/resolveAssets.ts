@@ -13,24 +13,43 @@ const CDN_BASE = (import.meta.env.VITE_CDN_BASE || 'https://d29yoaro2sdwp8.cloud
 const S3_HOST_RE = /https:\/\/ik-nocode-paywall\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com\//g;
 const CDN_HOST_RE = /https:\/\/d29yoaro2sdwp8\.cloudfront\.net\//g;
 
-// Bật proxy CORS (/api/asset) thay vì hiển thị URL CDN đầy đủ.
-//   false (mặc định) → editor hiển thị URL CDN đầy đủ (https://…cloudfront.net/…).
-//                       Ảnh/video render trực tiếp bằng <img>/<video> (không cần CORS).
-//   true             → đổi mọi URL sang proxy cùng origin; cần cho lottie/file-size
-//                       (fetch) khi CDN/S3 thiếu header CORS.
+// Bật proxy CORS (/api/asset) cho riêng field "lottie_url".
+//   false (mặc định) → mọi URL hiển thị CDN đầy đủ (https://…cloudfront.net/…).
+//   true             → CHỈ "lottie_url" đổi sang proxy cùng origin (cần cho fetch()
+//                       của lottie extension khi CDN thiếu header CORS). image_url/
+//                       gif_url/preview/biến string khác giữ nguyên CDN — <img>/<video>
+//                       render trực tiếp không cần CORS, và giá trị biến (icon/video…)
+//                       cần hiển thị URL thật để copy/dùng ngoài editor.
 const USE_ASSET_PROXY = (import.meta.env.VITE_ASSET_PROXY || 'false') === 'true';
 
-// Chuẩn hoá URL asset cho editor.
-//  - proxy mode: S3 + CDN → /api/asset?key=… (tránh CORS khi fetch).
-//  - direct mode: S3 → CDN (hiển thị URL CDN đầy đủ), CDN giữ nguyên.
-function rewriteBucketUrls(json: string): string {
-    if (USE_ASSET_PROXY) {
-        return json
-            .replace(S3_HOST_RE, `${API_BASE}/asset?key=`)
-            .replace(CDN_HOST_RE, `${API_BASE}/asset?key=`);
+// Đổi riêng các field "lottie_url" (bất kể lồng ở đâu: extensions[].params, lottie_params…)
+// sang proxy /api/asset?key=…
+function proxyLottieUrls(node: unknown): unknown {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) return node.map(proxyLottieUrls);
+    const obj = node as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+        if (k === 'lottie_url' && typeof v === 'string') {
+            next[k] = v.replace(CDN_HOST_RE, `${API_BASE}/asset?key=`);
+        } else {
+            next[k] = proxyLottieUrls(v);
+        }
     }
-    // direct mode: S3 → CDN, đồng thời dọn URL proxy còn sót lại trong file cũ → CDN.
-    return restoreAssetUrls(json.replace(S3_HOST_RE, `${CDN_BASE}/`));
+    return next;
+}
+
+// Chuẩn hoá URL asset cho editor: LUÔN đổi S3 → CDN (hiển thị URL đầy đủ), đồng thời
+// dọn URL proxy còn sót lại trong file cũ → CDN. Nếu bật proxy, riêng "lottie_url" sẽ
+// được proxy hoá thêm một bước sau khi đã chuẩn hoá về CDN.
+function rewriteBucketUrls(json: string): string {
+    const cdn = restoreAssetUrls(json.replace(S3_HOST_RE, `${CDN_BASE}/`));
+    if (!USE_ASSET_PROXY) return cdn;
+    try {
+        return JSON.stringify(proxyLottieUrls(JSON.parse(cdn)));
+    } catch {
+        return cdn;
+    }
 }
 
 // URL công khai để khôi phục asset khi LƯU. Mặc định = CDN (khớp với URL hiển thị
