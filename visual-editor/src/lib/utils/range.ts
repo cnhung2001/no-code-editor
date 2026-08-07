@@ -1,6 +1,6 @@
 import { isEqual } from './isEqual';
 
-export type FontWeight = 'light' | 'regular' | 'medium' | 'bold';
+export type FontWeight = 'light' | 'regular' | 'medium' | 'semibold' | 'bold';
 
 export type LineStyle = 'none' | 'single';
 

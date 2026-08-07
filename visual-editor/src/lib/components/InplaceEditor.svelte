@@ -104,11 +104,14 @@
         if (
             fontWeight === 'light' ||
             fontWeight === 'medium' ||
+            fontWeight === 'semibold' ||
             fontWeight === 'bold' ||
             fontWeight === 'regular'
         ) {
             if (fontWeight === 'medium') {
                 return 500;
+            } else if (fontWeight === 'semibold') {
+                return 600;
             } else if (fontWeight === 'bold') {
                 return 700;
             } else if (fontWeight === 'light') {
@@ -1089,6 +1092,7 @@
                     <option value="light">{$l10nString('props.font_weight_light')}</option>
                     <option value="regular">{$l10nString('props.font_weight_normal')}</option>
                     <option value="medium">{$l10nString('props.font_weight_medium')}</option>
+                    <option value="semibold">{$l10nString('props.font_weight_semibold')}</option>
                     <option value="bold">{$l10nString('props.font_weight_bold')}</option>
                 </select>
             </div>

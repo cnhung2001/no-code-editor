@@ -7,11 +7,14 @@ import { s3 } from '../s3';
 const URL_KEYS = ['image_url', 'gif_url', 'preview', 'lottie_url']; // các field chứa URL ảnh
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
-const CDN_BASE = (import.meta.env.VITE_CDN_BASE || 'https://d29yoaro2sdwp8.cloudfront.net').replace(/\/$/, '');
+const CDN_BASE = (import.meta.env.VITE_CDN_BASE || 'https://no-code-assests.begamob.com').replace(/\/$/, '');
 
 // Regex bắt URL bucket gốc (S3 mọi region) — để chuẩn hoá host.
 const S3_HOST_RE = /https:\/\/ik-nocode-paywall\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com\//g;
-const CDN_HOST_RE = /https:\/\/d29yoaro2sdwp8\.cloudfront\.net\//g;
+// Domain CDN cũ (CloudFront gốc) — file layout cũ có thể còn URL này, cần chuẩn hoá về CDN_BASE hiện tại.
+const LEGACY_CDN_HOST_RE = /https:\/\/d29yoaro2sdwp8\.cloudfront\.net\//g;
+// Khớp CDN_BASE hiện hành (đổi theo VITE_CDN_BASE) — dùng để nhận diện URL literal cần proxy hoá.
+const CDN_HOST_RE = new RegExp(`${CDN_BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`, 'g');
 
 // Bật proxy CORS (/api/asset) cho riêng field "lottie_url".
 //   false (mặc định) → mọi URL hiển thị CDN đầy đủ (https://…cloudfront.net/…).
@@ -43,7 +46,9 @@ function proxyLottieUrls(node: unknown): unknown {
 // dọn URL proxy còn sót lại trong file cũ → CDN. Nếu bật proxy, riêng "lottie_url" sẽ
 // được proxy hoá thêm một bước sau khi đã chuẩn hoá về CDN.
 function rewriteBucketUrls(json: string): string {
-    const cdn = restoreAssetUrls(json.replace(S3_HOST_RE, `${CDN_BASE}/`));
+    const cdn = restoreAssetUrls(
+        json.replace(S3_HOST_RE, `${CDN_BASE}/`).replace(LEGACY_CDN_HOST_RE, `${CDN_BASE}/`)
+    );
     if (!USE_ASSET_PROXY) return cdn;
     try {
         return JSON.stringify(proxyLottieUrls(JSON.parse(cdn)));

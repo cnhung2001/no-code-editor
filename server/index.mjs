@@ -285,7 +285,7 @@ function translateStub(text, targets) {
 
 // google: endpoint dịch free (không cần key). 1 target/lần → chạy song song có giới hạn.
 // Một số mã ngôn ngữ cần map cho Google.
-const GOOGLE_LANG_MAP = { zh: 'zh-CN', he: 'iw', nb: 'no' };
+const GOOGLE_LANG_MAP = { zh: 'zh-CN', he: 'iw', nb: 'no', vn: 'vi' };
 async function translateOneGoogle(text, from, to) {
     const tl = GOOGLE_LANG_MAP[to] || to;
     const sl = GOOGLE_LANG_MAP[from] || from;

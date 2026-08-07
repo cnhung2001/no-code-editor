@@ -131,6 +131,7 @@ export const namedTemplates: Record<string, TemplateDescription> = {
                 name: 'props.font_weight',
                 prop: 'font_weight',
                 type: 'select',
+                hasEmpty: false,
                 options: [{
                     name: 'props.font_weight_light',
                     value: 'light'
@@ -140,6 +141,9 @@ export const namedTemplates: Record<string, TemplateDescription> = {
                 }, {
                     name: 'props.font_weight_medium',
                     value: 'medium'
+                }, {
+                    name: 'props.font_weight_semibold',
+                    value: 'semibold'
                 }, {
                     name: 'props.font_weight_bold',
                     value: 'bold'
@@ -263,6 +267,7 @@ export const namedTemplates: Record<string, TemplateDescription> = {
                 name: 'props.font_weight',
                 prop: 'list_font_weight',
                 type: 'select',
+                hasEmpty: false,
                 options: [{
                     name: 'props.font_weight_light',
                     value: 'light'
@@ -272,6 +277,9 @@ export const namedTemplates: Record<string, TemplateDescription> = {
                 }, {
                     name: 'props.font_weight_medium',
                     value: 'medium'
+                }, {
+                    name: 'props.font_weight_semibold',
+                    value: 'semibold'
                 }, {
                     name: 'props.font_weight_bold',
                     value: 'bold'
