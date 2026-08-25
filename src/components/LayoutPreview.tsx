@@ -7,7 +7,7 @@ import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
 import { resolveAssets } from '../editor/resolveAssets';
 import { toSaveFormat, extractLogId, extractMeta } from '../editor/wrapper';
-import { ALLOW_PUSH } from '../config';
+import { usePerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
 
 interface Props {
@@ -18,6 +18,7 @@ interface Props {
 }
 
 export function LayoutPreview({ path, file, onBack, onPush }: Props) {
+    const perms = usePerms();
     const project = path[0] || '';
     const editorRef = useRef<DivEditorHandle>(null);
     const [raw, setRaw] = useState<string>('');
@@ -77,11 +78,11 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                 <div className="p-actions">
                     <button className="btn ghost sm" onClick={() => setShowMeta(true)}>{Icon.info} Metadata</button>
                     <button className="btn ghost sm" onClick={download}>{Icon.download} Download</button>
-                    {ALLOW_PUSH && (
-                        <>
-                            <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
-                            <button className="btn primary sm" onClick={push}>{Icon.upload} Push to S3</button>
-                        </>
+                    {perms.update && (
+                        <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
+                    )}
+                    {perms.publish && (
+                        <button className="btn primary sm" onClick={push}>{Icon.upload} Push to S3</button>
                     )}
                 </div>
             </header>

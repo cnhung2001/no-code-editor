@@ -1,10 +1,14 @@
 // ── NoCode Preview — backend proxy cho S3 (giữ AWS credentials) ───────────
 // Frontend gọi /api/* qua đây; credentials không bao giờ lộ ra browser.
 
-import 'dotenv/config';
+import './env.mjs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import multer from 'multer';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import {
     S3Client,
     ListObjectsV2Command,
@@ -19,15 +23,23 @@ import {
     CloudFrontClient,
     CreateInvalidationCommand
 } from '@aws-sdk/client-cloudfront';
+import { authRouter } from './auth-routes.mjs';
+import { authenticate, requireAction } from './authz.mjs';
 
 const {
-    PORT = 8787,
+    PORT = 8080,
     AWS_REGION = 'ap-southeast-1',
     S3_BUCKET = 'ik-nocode-paywall',
     PRESIGN_TTL = '900',
     CLOUDFRONT_DISTRIBUTION_ID = '',
     USE_S3_VERSIONING = 'true',
-    CORS_ORIGIN = 'http://localhost:5173',
+    // Sau khi gộp về một origin (§A), browser không còn gọi cross-origin nên
+    // CORS mặc định TẮT. Chỉ bật khi thực sự cần client khác origin gọi vào —
+    // để mặc định mở kèm cookie credentials là tự tạo lỗ.
+    CORS_ORIGIN = '',
+    NODE_ENV = 'development',
+    // Vite dev server mà gateway proxy tới khi chạy local.
+    VITE_DEV_URL = 'http://localhost:5173',
     // ── Machine translation (i18n auto-translate) ──
     // 'stub'     → trả "[locale] text" (mặc định, không gọi API ngoài)
     // 'rc-admin' → gọi service MT của rc-admin (bulk-suggest)
@@ -41,9 +53,46 @@ const s3 = new S3Client({ region: AWS_REGION });
 const cf = CLOUDFRONT_DISTRIBUTION_ID ? new CloudFrontClient({ region: AWS_REGION }) : null;
 
 const app = express();
-app.use(cors({ origin: CORS_ORIGIN }));
+if (CORS_ORIGIN) {
+    app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
+}
 app.use(express.json({ limit: '12mb' }));
+app.use(cookieParser());
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+
+// Health check — Lightsail/ALB gọi endpoint này, phải 200 khi CHƯA đăng nhập.
+// Đặt trước authRouter và trước SPA fallback ở cuối file.
+app.get('/healthz', (_req, res) => res.type('text').send('ok'));
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+// Mount TRƯỚC các guard bên dưới: /auth/* phải vào được khi chưa đăng nhập,
+// và /api/me tự authenticate để trả 401 đúng chỗ.
+app.use(authRouter);
+
+// Bảng method+path → action. GET/HEAD mặc định 'read'; mọi method ghi PHẢI có
+// mặt ở đây, không thì bị chặn — thêm endpoint mới mà quên khai báo thì fail
+// closed (403) chứ không lặng lẽ mở quyền.
+const API_WRITE_ACTIONS = [
+    ['PUT', /^\/object$/, 'update'],
+    ['DELETE', /^\/object$/, 'delete'],
+    ['POST', /^\/upload$/, 'update'],
+    ['POST', /^\/publish$/, 'publish'],
+    ['POST', /^\/translate$/, 'read'] // dịch không đổi gì trên S3
+];
+
+function apiActionGuard(req, res, next) {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+        return requireAction('read')(req, res, next);
+    }
+    const hit = API_WRITE_ACTIONS.find(([m, re]) => m === req.method && re.test(req.path));
+    if (!hit) {
+        return res.status(403).json({ error: `Endpoint ${req.method} ${req.path} chưa khai báo action` });
+    }
+    return requireAction(hit[2])(req, res, next);
+}
+
+// Mọi /api/* còn lại: phải đăng nhập, rồi phải đủ quyền.
+app.use('/api', authenticate, apiActionGuard);
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
 const kind = (key) => {
@@ -373,6 +422,36 @@ app.get('/api/translate/info', (_req, res) => {
     res.json({ provider });
 });
 
-app.listen(Number(PORT), () => {
-    console.log(`NoCode Preview S3 proxy → http://localhost:${PORT} (bucket: ${S3_BUCKET}, region: ${AWS_REGION}) · MT=${MT_PROVIDER}`);
+// ── Gateway: frontend đi cùng origin với /api và /auth ─────────────────────
+// Redirect URI của authz khớp tuyệt đối một origin duy nhất, nên browser chỉ
+// được nói chuyện với cổng này. Dev: proxy sang Vite. Prod: serve dist/.
+const IS_DEV = NODE_ENV !== 'production';
+const DIST_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
+
+let devProxy;
+if (IS_DEV) {
+    devProxy = createProxyMiddleware({
+        target: VITE_DEV_URL,
+        changeOrigin: true,
+        ws: true // HMR websocket
+    });
+    app.use(devProxy);
+} else {
+    app.use(express.static(DIST_DIR));
+    // SPA fallback — mọi path không phải file tĩnh đều trả index.html.
+    app.get('*', (_req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')));
+}
+
+const server = app.listen(Number(PORT), () => {
+    console.log(
+        `NoCode Preview → http://localhost:${PORT}  ` +
+        `(bucket: ${S3_BUCKET}, region: ${AWS_REGION}) · MT=${MT_PROVIDER} · ` +
+        `authz=${process.env.AUTHZ_SYSTEM_CODE} · ${IS_DEV ? `dev proxy → ${VITE_DEV_URL}` : `static ← ${DIST_DIR}`}`
+    );
 });
+
+// ws:true chỉ tự đăng ký upgrade sau request HTTP đầu tiên; wire tay để HMR
+// không chết khi browser mở websocket trước.
+if (devProxy?.upgrade) {
+    server.on('upgrade', devProxy.upgrade);
+}

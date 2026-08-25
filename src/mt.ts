@@ -2,6 +2,8 @@
 // Engine dịch (stub / rc-admin) nằm ở server; frontend chỉ gọi qua đây.
 // Dùng cho tính năng Localize: dịch 1 chuỗi nguồn sang nhiều locale.
 
+import { assertAuthorized } from './auth/session';
+
 const BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export interface TranslateOpts {
@@ -21,6 +23,7 @@ export async function translate(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text, from, targets, ...opts })
     });
+    await assertAuthorized(res);
     if (!res.ok) {
         const t = await res.text().catch(() => res.statusText);
         throw new Error(`translate ${res.status}: ${t}`);

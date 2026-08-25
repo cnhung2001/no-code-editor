@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+.git
+.env
+.env.local
+server/.env
+.npmrc
+deploy/.env.deploy
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+.claude

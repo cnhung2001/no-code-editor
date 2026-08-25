@@ -1,0 +1,39 @@
+# Fragment riêng của NoCode Editor.
+# deploy.sh thay __NOCODE_COLOR__ → ghi ../sites/no-code.caddy → `caddy reload`.
+# Tách khỏi Caddyfile.tmpl của bmik-api vì hai app có màu blue/green ĐỘC LẬP:
+# dùng chung một placeholder thì deploy app này sẽ đè màu của app kia.
+#
+# http:// (không https://) — Cloudflare Flexible terminate TLS ở edge, origin nhận
+# port 80. Prefix này tắt automatic HTTPS/ACME của Caddy, giống bmik-api.
+http://nocode.ikame-solution.com {
+        encode zstd gzip
+
+        header {
+                X-Content-Type-Options "nosniff"
+                X-Frame-Options "SAMEORIGIN"
+                Referrer-Policy "strict-origin-when-cross-origin"
+        }
+
+        # Vite đặt hash trong tên file dist/assets/* → cache vĩnh viễn an toàn.
+        # Bundle editor ~1MB nên cái này đáng giá.
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+        # index.html thì TUYỆT ĐỐI không cache, nếu không deploy mới sẽ trỏ asset cũ.
+        header /index.html Cache-Control "no-cache"
+
+        # multer giới hạn 8MB/file, express.json 12mb → 20MB là dư.
+        request_body {
+                max_size 20MB
+        }
+
+        handle {
+                reverse_proxy nocode-app-__NOCODE_COLOR__:8080 {
+                        header_up X-Forwarded-Proto https
+                        transport http {
+                                dial_timeout 5s
+                                read_timeout 120s
+                                write_timeout 120s
+                        }
+                }
+        }
+}

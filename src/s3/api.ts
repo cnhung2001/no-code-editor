@@ -1,6 +1,7 @@
 // ── Adapter S3 THẬT: gọi backend proxy (server/index.mjs) ─────────────────
 // Backend giữ AWS credentials; frontend không bao giờ chạm trực tiếp tới creds.
 
+import { assertAuthorized, redirectToLogin } from '../auth/session';
 import type {
     S3Adapter,
     S3Item,
@@ -13,6 +14,8 @@ import type {
 const BASE = import.meta.env.VITE_API_BASE || '/api';
 
 async function j<T>(res: Response): Promise<T> {
+    // 401 → session chết, bật ra login. 403 → thiếu quyền, ném lỗi đọc được.
+    await assertAuthorized(res);
     if (!res.ok) {
         const text = await res.text().catch(() => res.statusText);
         throw new Error(`S3 API ${res.status}: ${text}`);
@@ -33,6 +36,7 @@ export const apiAdapter: S3Adapter = {
     async getObjectText(key: string) {
         const q = new URLSearchParams({ key });
         const res = await fetch(`${BASE}/object?${q}`);
+        if (res.status === 401) redirectToLogin();
         if (!res.ok) throw new Error(`getObject ${res.status}`);
         return res.text();
     },

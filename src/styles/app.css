@@ -165,3 +165,21 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 11px; font-size: 13px; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 36px rgba(0, 0, 0, .3); z-index: 60; }
 .toast svg { color: #22E345; }
+
+/* ── Login ───────────────────────────────────────────────────────────────── */
+.login { grid-column: 1 / -1; display: grid; place-items: center; height: 100vh; background: var(--bg); }
+.login-card { width: min(420px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.login-brand { display: flex; align-items: center; gap: 11px; }
+.login-lead { margin: 0; font-size: 13px; color: var(--ink-3); line-height: 1.55; }
+.login-error { font-size: 12.5px; color: #8a1c1c; background: #fdeceb; border: 1px solid #f6cfcb; border-radius: 9px; padding: 9px 11px; line-height: 1.5; }
+.login-btn { justify-content: center; padding: 11px 14px; font-size: 13.5px; }
+.login-foot { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; border-top: 1px solid var(--line); padding-top: 14px; }
+.login-foot code { font-family: var(--mono); font-size: 11px; background: #f4f5f3; padding: 1px 5px; border-radius: 5px; }
+
+/* ── User menu (chân sidebar) ─────────────────────────────────────────────── */
+.user-menu { display: flex; align-items: center; gap: 9px; width: 100%; }
+.user-avatar { width: 28px; height: 28px; border-radius: 99px; flex-shrink: 0; object-fit: cover; }
+.user-avatar--fallback { display: grid; place-items: center; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; }
+.user-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.user-name { font-size: 12px; font-weight: 600; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-role { font-size: 10.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

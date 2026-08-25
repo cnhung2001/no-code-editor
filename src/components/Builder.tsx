@@ -6,7 +6,7 @@ import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
 import { resolveAssets } from '../editor/resolveAssets';
 import { toSaveFormat, extractMeta } from '../editor/wrapper';
-import { ALLOW_PUSH } from '../config';
+import { usePerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
 
 const BLANK = JSON.stringify({
@@ -37,6 +37,7 @@ interface Props {
 }
 
 export function Builder({ path, file, isNew, onBack, onPush }: Props) {
+    const perms = usePerms();
     const project = path[0] || '';
     const editorRef = useRef<DivEditorHandle>(null);
     const [name, setName] = useState(isNew ? 'untitled_layout' : (file?.name.replace(/\.json$/, '') || 'layout'));
@@ -93,11 +94,11 @@ export function Builder({ path, file, isNew, onBack, onPush }: Props) {
                     <span className={'bld-tag' + (isNew ? ' new' : '')}>{isNew ? 'New · Draft' : dirty ? 'Editing*' : 'Editing'}</span>
                 </div>
                 <div className="bld-right">
-                    {ALLOW_PUSH && (
-                        <>
-                            <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
-                            <button className="btn primary sm" onClick={push}>{Icon.upload} Push to S3</button>
-                        </>
+                    {perms.update && (
+                        <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
+                    )}
+                    {perms.publish && (
+                        <button className="btn primary sm" onClick={push}>{Icon.upload} Push to S3</button>
                     )}
                 </div>
             </header>

@@ -1,0 +1,12 @@
+{
+  "anyOf": [
+    {
+      "$ref": "div-rotation-transformation.json",
+      "$description": "translations.json#/div_transformation_rotation"
+    },
+    {
+      "$ref": "div-translation-transformation.json",
+      "$description": "translations.json#/div_transformation_translation"
+    }
+  ]
+}

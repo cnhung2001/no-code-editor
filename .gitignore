@@ -2,6 +2,9 @@ node_modules
 dist
 .env
 .env.local
-.env.readonly
 *.log
 .DS_Store
+
+# npm auth token cho registry @ikameglobal — KHÔNG commit
+.npmrc
+tsconfig.tsbuildinfo

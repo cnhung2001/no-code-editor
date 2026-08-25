@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
-import { ALLOW_PUSH } from '../config';
+import { usePerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
@@ -28,6 +28,7 @@ interface Props {
 }
 
 export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
+    const perms = usePerms();
     const prefix = path.length ? path.join('/') + '/' : '';
     const [items, setItems] = useState<S3Item[]>([]);
     const [loading, setLoading] = useState(true);
@@ -111,7 +112,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                         <span className="search-ic">{Icon.search}</span>
                         <input placeholder="Tìm kiếm…" value={q} onChange={(e) => setQ(e.target.value)} />
                     </div>
-                    {inProject && ALLOW_PUSH && (
+                    {inProject && perms.update && (
                         <button className="btn primary sm" onClick={onNewLayout}>
                             {Icon.plus} New layout
                         </button>
@@ -165,7 +166,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                                 )}
                             </div>
                         </button>
-                        {it.type !== 'folder' && it.key && ALLOW_PUSH && (
+                        {it.type !== 'folder' && it.key && perms.delete && (
                             <button
                                 className="card-del"
                                 title="Xoá file khỏi S3"

@@ -1,5 +1,6 @@
 // ── Left rail: bucket + danh sách project ─────────────────────────────────
 import { Icon } from '../lib/icons';
+import { UserMenu } from '../auth/UserMenu';
 import type { ProjectInfo, S3Item } from '../types';
 
 const BUCKET = 'ik-nocode-paywall';
@@ -76,7 +77,7 @@ export function Sidebar({ projects, files, activeProject, onProject, onFile, onR
             )}
 
             <div className="sidebar-foot">
-                <span className="dot-green" /> S3 sync active
+                <UserMenu />
             </div>
         </aside>
     );

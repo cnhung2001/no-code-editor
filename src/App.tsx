@@ -1,4 +1,4 @@
-// ── App root: định tuyến Browser → Preview → Builder + modals ─────────────
+// ── App root: gate đăng nhập → Browser → Preview → Builder + modals ────────
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Browser } from './components/Browser';
@@ -10,12 +10,45 @@ const Builder = lazy(() => import('./components/Builder').then((m) => ({ default
 import { HtmlModal } from './components/modals/HtmlModal';
 import { PushModal } from './components/modals/PushModal';
 import { s3, IS_MOCK } from './s3';
-import { ALLOW_PUSH } from './config';
+import { AuthProvider, useAuth, usePerms } from './auth/AuthContext';
+import { LoginScreen } from './auth/LoginScreen';
 import type { ProjectInfo, S3Item, LayoutMeta } from './types';
 
 type View = 'browser' | 'preview' | 'builder';
 
 export default function App() {
+    return (
+        <AuthProvider>
+            <AuthGate />
+        </AuthProvider>
+    );
+}
+
+/** Chặn toàn bộ app sau đăng nhập. Quyền chi tiết gate ở từng nút bên trong. */
+function AuthGate() {
+    const { status, error, reload } = useAuth();
+
+    if (status === 'loading') {
+        return <div className="p-loading">Đang kiểm tra đăng nhập…</div>;
+    }
+    if (status === 'anonymous') {
+        return <LoginScreen />;
+    }
+    if (status === 'error') {
+        return (
+            <div className="login">
+                <div className="login-card">
+                    <div className="login-error">Không đọc được thông tin đăng nhập: {error}</div>
+                    <button className="btn primary login-btn" onClick={reload}>Thử lại</button>
+                </div>
+            </div>
+        );
+    }
+    return <Shell />;
+}
+
+function Shell() {
+    const perms = usePerms();
     const [projects, setProjects] = useState<ProjectInfo[]>([]);
     const [rootFiles, setRootFiles] = useState<S3Item[]>([]);
     const [path, setPath] = useState<string[]>([]);
@@ -69,6 +102,13 @@ export default function App() {
         setView('builder');
     }
 
+    // Badge phản ánh quyền THẬT, không phải cờ build-time như trước.
+    const capabilityNotice = !perms.update
+        ? 'Chế độ chỉ xem · không ghi S3'
+        : !perms.publish
+          ? 'Sửa & lưu draft được · không có quyền publish'
+          : null;
+
     return (
         <div className={'nc-app' + (view !== 'browser' ? ' nc-app--no-sidebar' : '')}>
             {view === 'browser' && (
@@ -83,7 +123,7 @@ export default function App() {
             )}
 
             {IS_MOCK && <div className="mock-banner">MOCK MODE · đang dùng dữ liệu giả (đặt VITE_USE_MOCK=false để nối S3 thật)</div>}
-            {!ALLOW_PUSH && <div className="readonly-badge">Chế độ chỉ xem · không ghi S3</div>}
+            {capabilityNotice && <div className="readonly-badge">{capabilityNotice}</div>}
 
             {view === 'browser' && (
                 <Browser path={path} onOpen={openItem} onCrumb={gotoCrumb} onNewLayout={newLayout} />
