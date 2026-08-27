@@ -1,6 +1,7 @@
 // ── Màn Builder: DivProEditor đầy đủ + Save draft / Push to S3 ─────────────
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
+import { Loader } from './Loader';
 import { s3 } from '../s3';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
@@ -114,7 +115,7 @@ export function Builder({ path, file, isNew, onBack, onPush }: Props) {
                         onChange={() => setDirty(true)}
                     />
                 ) : (
-                    <div className="p-loading">Đang mở builder…</div>
+                    <Loader label="Đang mở builder…" />
                 )}
             </div>
 

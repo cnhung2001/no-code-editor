@@ -15,7 +15,7 @@ ECR_REGISTRY="${ECR_REGISTRY:-762871078113.dkr.ecr.ap-southeast-1.amazonaws.com}
 ECR_REPO="${ECR_REPO:-ik-nocode-editor}"
 
 # ⚠ VITE_* nướng thẳng vào bundle lúc build → image KHÔNG portable giữa môi trường.
-VITE_CDN_BASE="${VITE_CDN_BASE:-https://d29yoaro2sdwp8.cloudfront.net}"
+VITE_CDN_BASE="${VITE_CDN_BASE:-https://no-code-assests.begamob.com}"
 VITE_SAVE_FORMAT="${VITE_SAVE_FORMAT:-wrapper}"
 
 if [ -n "$(git status --porcelain)" ]; then

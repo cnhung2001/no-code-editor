@@ -17,5 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "//exclude": "File *.test.ts chạy bằng `node --experimental-strip-types` (npm test), không nằm trong bundle. Node cần đuôi .ts trong import nên tsc của app sẽ báo TS5097 nếu compile chung.",
+  "exclude": ["src/**/*.test.ts"]
 }

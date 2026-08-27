@@ -1,6 +1,7 @@
 // ── Lightbox xem ảnh từ S3 ────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { Icon } from '../../lib/icons';
+import { Loader } from '../Loader';
 import { fmtSize } from '../../lib/format';
 import { s3 } from '../../s3';
 import type { S3Item } from '../../types';
@@ -18,7 +19,7 @@ export function ImageModal({ file, onClose }: { file: S3Item; onClose(): void })
                     <span>{file.name}</span>
                     <button className="icon-btn" onClick={onClose}>{Icon.close}</button>
                 </header>
-                <div className="img-modal-body">{url ? <img src={url} alt={file.name} /> : 'Đang tải…'}</div>
+                <div className="img-modal-body">{url ? <img src={url} alt={file.name} /> : <Loader label="Đang tải ảnh…" compact />}</div>
                 <footer className="modal-foot">
                     <span>{fmtSize(file.size)}</span>
                     <div className="modal-foot-actions">

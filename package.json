@@ -3,12 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "NoCode Preview \u2014 S3 DivKit Layout Manager nh\u00fang DivKit Visual Editor",
+  "description": "NoCode Preview — S3 DivKit Layout Manager nhúng DivKit Visual Editor",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
+    "test": "node --experimental-strip-types src/lib/route.test.ts",
     "server": "node server/index.mjs",
     "dev:all": "concurrently -k \"npm:server\" \"npm:dev\""
   },

@@ -2,6 +2,7 @@
 import { Icon } from '../lib/icons';
 import { UserMenu } from '../auth/UserMenu';
 import type { ProjectInfo, S3Item } from '../types';
+import { SkeletonRows } from './Loader';
 
 const BUCKET = 'ik-nocode-paywall';
 const REGION = 'ap-southeast-1';
@@ -55,7 +56,7 @@ export function Sidebar({ projects, files, activeProject, onProject, onFile, onR
                         <span className="tree-count">{p.layoutCount}</span>
                     </button>
                 ))}
-                {projects.length === 0 && <div className="tree-empty">Đang tải…</div>}
+                {projects.length === 0 && <SkeletonRows n={4} />}
             </nav>
 
             {files.length > 0 && (

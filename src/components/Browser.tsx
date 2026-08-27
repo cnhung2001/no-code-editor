@@ -5,6 +5,7 @@ import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
 import { usePerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
+import { Dots, SkeletonCards } from './Loader';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
     const map: Record<string, [string, string]> = {
@@ -121,11 +122,12 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
             </header>
 
             <div className="b-meta">
-                {loading ? 'Đang tải…' : `${shownCount} mục`}
+                {loading ? <Dots label="Đang tải" /> : `${shownCount} mục`}
                 {err && <span className="b-err"> · Lỗi: {err}</span>}
             </div>
 
             <div className="cards">
+                {loading && visible.length === 0 && <SkeletonCards n={8} />}
                 {showAssetCard && (
                     <div className="card-wrap">
                         <button className="card" onClick={() => setAssetsOpen(true)}>

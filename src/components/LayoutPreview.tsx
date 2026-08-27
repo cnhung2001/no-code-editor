@@ -9,6 +9,7 @@ import { resolveAssets } from '../editor/resolveAssets';
 import { toSaveFormat, extractLogId, extractMeta } from '../editor/wrapper';
 import { usePerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
+import { Loader } from './Loader';
 
 interface Props {
     path: string[];
@@ -100,7 +101,7 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                             onChange={() => setDirty(true)}
                         />
                     )}
-                    {!resolved && !err && <div className="p-loading">Đang dựng editor…</div>}
+                    {!resolved && !err && <Loader label="Đang dựng editor…" />}
                 </div>
             </div>
 
