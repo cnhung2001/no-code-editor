@@ -1,13 +1,3 @@
-#!/usr/bin/env bash
-#
-# Blue-green deploy NoCode Editor — chạy trên host, thư mục ~/project/no-code/.
-# Dùng CHUNG container proxy `bmik-proxy` và network `bmik_net` với bmik-api,
-# nhưng có active-color RIÊNG và fragment Caddy RIÊNG (../sites/no-code.caddy).
-#
-# Yêu cầu đã làm 1 lần trên host (xem README.md, mục "Sửa 2 file của bmik"):
-#   - docker-compose.proxy.yml mount thêm ./sites:/etc/caddy/sites:ro
-#   - Caddyfile.tmpl có dòng: import /etc/caddy/sites/*.caddy
-#
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -18,7 +8,6 @@ SITES_DIR=../sites
 CADDY_OUT="${SITES_DIR}/no-code.caddy"
 STATE=active-color
 PROXY_CONTAINER=bmik-proxy
-# Region ECR — cùng ap-southeast-1 với host/S3. Tách biến riêng cho dễ đổi.
 
 ECR_REGION="${ECR_REGION:-ap-southeast-1}"
 ECR_REGISTRY="${ECR_REGISTRY:-762871078113.dkr.ecr.ap-southeast-1.amazonaws.com}"
@@ -36,7 +25,6 @@ if grep -q '__FILL__\|__TAG__' .env; then
   echo "ERROR: ./.env còn __FILL__ / __TAG__ chưa điền."; exit 1
 fi
 
-# Proxy phải đang chạy — nocode KHÔNG tự dựng proxy (nó của bmik, dùng chung).
 if [ "$(docker inspect -f '{{.State.Running}}' "$PROXY_CONTAINER" 2>/dev/null || echo false)" != "true" ]; then
   echo "ERROR: container ${PROXY_CONTAINER} chưa chạy. Chạy deploy của bmik trước."; exit 1
 fi
@@ -75,6 +63,15 @@ wait_healthy() {
   return 1
 }
 
+RUNNING_IMAGE=$(docker inspect -f '{{.Config.Image}}' "nocode-app-${TARGET}" 2>/dev/null || echo "")
+if [ -n "$RUNNING_IMAGE" ]; then
+  REV=$(docker image inspect "$RUNNING_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || echo unknown)
+  DIGEST=$(docker image inspect "$RUNNING_IMAGE" --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' 2>/dev/null || echo unknown)
+  echo "    image  : ${RUNNING_IMAGE}"
+  echo "    git rev: ${REV:-unknown}"
+  echo "    digest : ${DIGEST:-unknown}"
+fi
+
 echo "[2/4] Chờ ${TARGET} healthy..."
 if ! wait_healthy "nocode-app-${TARGET}"; then
   echo "Health FAIL → rollback: hạ ${TARGET}, giữ ${ACTIVE} đang serve."
@@ -86,11 +83,10 @@ if ! wait_healthy "nocode-app-${TARGET}"; then
 fi
 
 echo "[3/4] Chuyển Caddy → ${TARGET}..."
-# Ghi qua file tạm rồi mv (rename atomic) — reload không bao giờ đọc trúng file ghi dở.
+
 sed "s/__NOCODE_COLOR__/${TARGET}/g" "$CADDY_TMPL" > "${CADDY_OUT}.tmp"
 mv -f "${CADDY_OUT}.tmp" "$CADDY_OUT"
-# reload nạp lại TOÀN BỘ config của proxy (gồm cả site của bmik-api) — zero-downtime,
-# nhưng nghĩa là fragment sai cú pháp sẽ làm reload fail và giữ nguyên config cũ.
+
 docker exec "$PROXY_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
 echo "[4/4] Ghi active=${TARGET}, tắt màu cũ..."

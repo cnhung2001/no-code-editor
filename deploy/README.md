@@ -175,7 +175,8 @@ ssh <host> 'nano ~/project/no-code/.env'    # điền hết __FILL__
 ```
 
 Cần điền: `AUTHZ_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
-`NOCODE_IMAGE` để bước 3 in ra rồi dán vào.
+`NOCODE_IMAGE` để nguyên `…/ik-nocode-editor:prod` — tag di động, đặt một lần rồi
+không đụng lại ở các lần deploy sau (xem bước 3).
 
 ---
 
@@ -189,7 +190,28 @@ git add -A && git commit -m "..."     # tag = git SHA nên phải commit trướ
 ```
 
 Script tự: tạo repo ECR nếu chưa có → login ap-southeast-1 → `buildx --platform linux/amd64`
-→ push → in ra dòng `NOCODE_IMAGE=...`. Dán dòng đó vào `.env` trên host.
+→ push **hai tag cùng một image**: `:<git-sha>` (bất biến) và `:prod` (di động).
+
+Host pin `:prod` nên **không phải sửa `.env` mỗi lần deploy** — `deploy.sh` chạy
+`up -d --pull always` nên luôn kéo đúng bản `:prod` vừa push. Tag SHA vẫn phải có:
+`:prod` luôn trỏ bản mới nhất, không có "bản trước" để quay về, nên rollback chỉ
+làm được qua tag SHA.
+
+Có thêm môi trường thì đặt tag riêng: `MOVING_TAG=staging ./deploy/build-push.sh`. Tắt hẳn (chỉ push SHA,
+quay lại lối cũ phải sửa `.env`): `MOVING_TAG= ./deploy/build-push.sh`.
+
+⚠ Đánh đổi của tag di động: nhìn `.env` không còn biết code nào đang chạy. Bù lại,
+image được gắn label `org.opencontainers.image.revision=<sha>` và `deploy.sh` in
+`git rev` + `digest` ngay trước bước health-check — đó là chỗ tra khi cần biết
+production đang ở commit nào. Trên host cũng xem được:
+
+```bash
+docker inspect nocode-app-$(cat ~/project/no-code/active-color) \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+⚠ Repo ECR phải để `imageTagMutability=MUTABLE` (hiện đang đúng), không thì push đè
+`:prod` sẽ bị từ chối.
 
 Khác gì với hướng dẫn mặc định của AWS console:
 
@@ -198,7 +220,7 @@ Khác gì với hướng dẫn mặc định của AWS console:
 | `docker build` | `docker buildx build --platform linux/amd64` | Mac ARM build ra image host không chạy được (`exec format error`) |
 | — | `--secret id=npmrc,src=.npmrc` | `@ikameglobal/authz-sdk` ở registry riêng; `COPY .npmrc` là lộ token vĩnh viễn trong layer |
 | — | `--build-arg VITE_*` | `VITE_*` nướng vào bundle lúc build, đặt ở env container vô tác dụng |
-| tag `:latest` | tag `:<git-sha>` | `latest` không rollback được, và Lightsail cache theo tag |
+| tag `:latest` | tag `:<git-sha>` **+** `:prod` | SHA để rollback; `:prod` để host khỏi sửa `.env` mỗi lần. `--pull always` nên không dính cache tag |
 
 ---
 
@@ -213,7 +235,10 @@ render `../sites/no-code.caddy` → `caddy reload` → ghi `active-color` → t�
 
 Health fail ⇒ tự rollback: hạ màu mới, giữ màu cũ đang serve, in healthcheck log + 50 dòng app log.
 
-**Rollback thủ công**: sửa `NOCODE_IMAGE` trong `.env` về tag cũ → chạy lại `deploy.sh`.
+**Rollback thủ công**: sửa `NOCODE_IMAGE` trong `.env` từ `:prod` sang tag SHA cũ
+(`aws ecr describe-images --repository-name ik-nocode-editor --region ap-southeast-1`
+để liệt kê) → chạy lại `deploy.sh`. Nhớ trả về `:prod` sau khi đã fix xong, không thì
+lần deploy sau vẫn dựng lại bản cũ đó.
 
 ---
 
@@ -249,6 +274,8 @@ nút Localize trả tiếng thật chứ không phải `[vi] text` (MT đúng).
 | Lưu layout mất `variables`/`screen_id` | build thiếu `--build-arg VITE_SAVE_FORMAT=wrapper` (mặc định code là `plain`) |
 | Đổi `VITE_CDN_BASE` trong `.env` không ăn | `VITE_*` là build-time, phải build lại image |
 | `docker pull` 403 khi deploy | policy ECR của creds host chưa liệt kê repo `ik-nocode-editor` (xem 0.4) |
+| Deploy xong vẫn ra code cũ | `.env` còn pin tag SHA từ lần rollback trước, chưa trả về `:prod` |
+| Push `:prod` bị `tag invalid: immutable` | repo ECR bị đổi sang `IMMUTABLE` |
 | `/api/list` trả 500 | thiếu/sai `AWS_ACCESS_KEY_ID` — Lightsail không có IAM instance role |
 | Caddy reload fail, config giữ nguyên cũ | fragment sai cú pháp; `docker exec bmik-proxy caddy validate ...` để xem lỗi |
 
