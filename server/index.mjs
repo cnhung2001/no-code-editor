@@ -414,12 +414,17 @@ app.post('/api/translate', async (req, res) => {
     }
 });
 
+// Provider MT thực tế đang chạy: khai 'rc-admin' mà thiếu base URL/project thì
+// rơi về stub — nên chỗ nào cần hiển thị đều đi qua đây, không in env thô.
+function effectiveMtProvider() {
+    if (MT_PROVIDER === 'rc-admin' && RC_ADMIN_BASE_URL && RC_ADMIN_PROJECT_ID) return 'rc-admin';
+    if (MT_PROVIDER === 'google') return 'google';
+    return 'stub';
+}
+
 // Thông tin provider MT hiện tại (để UI hiển thị/nhận biết stub vs thật).
 app.get('/api/translate/info', (_req, res) => {
-    let provider = 'stub';
-    if (MT_PROVIDER === 'rc-admin' && RC_ADMIN_BASE_URL && RC_ADMIN_PROJECT_ID) provider = 'rc-admin';
-    else if (MT_PROVIDER === 'google') provider = 'google';
-    res.json({ provider });
+    res.json({ provider: effectiveMtProvider() });
 });
 
 // ── Gateway: frontend đi cùng origin với /api và /auth ─────────────────────
@@ -443,11 +448,18 @@ if (IS_DEV) {
 }
 
 const server = app.listen(Number(PORT), () => {
-    console.log(
-        `NoCode Preview → http://localhost:${PORT}  ` +
-        `(bucket: ${S3_BUCKET}, region: ${AWS_REGION}) · MT=${MT_PROVIDER} · ` +
-        `authz=${process.env.AUTHZ_SYSTEM_CODE} · ${IS_DEV ? `dev proxy → ${VITE_DEV_URL}` : `static ← ${DIST_DIR}`}`
-    );
+    // Banner nhiều dòng thay vì một dòng dài: dòng đầu là URL DUY NHẤT cần mở,
+    // vì log này chạy cạnh log của Vite (cổng Vite mở trực tiếp sẽ hỏng).
+    console.log([
+        '',
+        `  NoCode Preview  ${IS_DEV ? 'dev' : 'production'}`,
+        '',
+        `  ➜  App:      http://localhost:${PORT}   ← mở URL này`,
+        `  ➜  Frontend: ${IS_DEV ? `proxy → ${VITE_DEV_URL}` : `static ← ${DIST_DIR}`}`,
+        `  ➜  Bucket:   ${S3_BUCKET} (${AWS_REGION})`,
+        `  ➜  Authz:    ${process.env.AUTHZ_SYSTEM_CODE || '(chưa cấu hình)'}  ·  MT: ${effectiveMtProvider()}`,
+        ''
+    ].join('\n'));
 });
 
 // ws:true chỉ tự đăng ký upgrade sau request HTTP đầu tiên; wire tay để HMR

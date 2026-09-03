@@ -8,6 +8,7 @@
     import Text from './controls/Text.svelte';
     import Select from './Select.svelte';
     import { ChangeCustomVariablesCommand } from '../data/commands/changeCustomVariables';
+    import { walk } from '../utils/tree';
     import AddButton from './controls/AddButton.svelte';
     import Checkbox from './controls/Checkbox.svelte';
     import ColorInput from './controls/ColorInput.svelte';
@@ -20,6 +21,50 @@
     const { customVariables, i18nMarkedVars } = state;
 
     $: visibleVariables = $customVariables.filter(v => !(v.type === 'dict' && $i18nMarkedVars.has(v.name)));
+
+    function escapeRegex(s: string): string {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function replaceJsonStrings(val: unknown, oldName: string, newName: string): unknown {
+        if (typeof val === 'string') {
+            // Replace all occurrences of the variable name inside @{...} expressions.
+            // Using word boundary (\b) so we don't partially rename longer identifiers.
+            const escaped = escapeRegex(oldName);
+            return val.replace(/@\{[^}]*\}/g, expr =>
+                expr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), newName)
+            );
+        }
+        if (Array.isArray(val)) return val.map(item => replaceJsonStrings(item, oldName, newName));
+        if (val && typeof val === 'object') {
+            const result: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+                result[k] = replaceJsonStrings(v, oldName, newName);
+            }
+            return result;
+        }
+        return val;
+    }
+
+    function toggleI18n(name: string): void {
+        const isMarked = $i18nMarkedVars.has(name);
+        if (isMarked) {
+            i18nMarkedVars.update(s => { const n = new Set(s); n.delete(name); return n; });
+            return;
+        }
+        // Rename to locale_ prefix if needed, then mark
+        const newName = name.startsWith('locale_') ? name : 'locale_' + name;
+        if (newName !== name) {
+            const newList = $customVariables.map(v => v.name === name ? { ...v, name: newName } : v);
+            updateList(newList);
+            // Update all references in the layout JSON
+            walk($tree, leaf => {
+                leaf.props.json = replaceJsonStrings(leaf.props.json, name, newName) as Record<string, unknown>;
+            });
+            $tree = $tree;
+        }
+        i18nMarkedVars.update(s => { const n = new Set(s); n.add(newName); return n; });
+    }
 
     function updateList(list: Variable[]): void {
         state.pushCommand(new ChangeCustomVariablesCommand(state, list));
@@ -206,6 +251,15 @@
             </Spoiler2>
 
             {#if !$readOnly}
+                {#if variable.type === 'dict'}
+                    <button
+                        class="custom-variables__i18n"
+                        class:custom-variables__locale_active={$i18nMarkedVars.has(variable.name)}
+                        aria-label="Mark as localization"
+                        data-custom-tooltip="Move to Localization tab"
+                        on:click|stopPropagation|preventDefault={() => toggleI18n(variable.name)}
+                    >🌐</button>
+                {/if}
                 <button
                     class="custom-variables__delete"
                     aria-label={$l10nString('delete')}
@@ -305,6 +359,41 @@
     .custom-variables__spacer {
         height: 20px;
         flex: 0 0 auto;
+    }
+
+    .custom-variables__i18n {
+        position: relative;
+        flex: 0 0 auto;
+        margin: 0;
+        margin-top: 4px;
+        padding: 0;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        background: none;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        appearance: none;
+        font-size: 16px;
+        line-height: 32px;
+        text-align: center;
+        opacity: 0.4;
+        transition: .15s ease-in-out;
+        transition-property: background-color, border-color, opacity;
+    }
+
+    .custom-variables__locale_active {
+        opacity: 1;
+    }
+
+    .custom-variables__i18n:hover {
+        background-color: var(--fill-transparent-1);
+        opacity: 1;
+    }
+
+    .custom-variables__i18n:focus-visible {
+        outline: none;
+        border-color: var(--accent-purple);
     }
 
     .custom-variables__delete {

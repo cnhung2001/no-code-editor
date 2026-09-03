@@ -136,9 +136,15 @@ export class State {
     previewLanguageCode = writable<string>('en');
     previewProductPrices = writable<Record<string, string>>({});
     i18nMarkedVars = writable<Set<string>>(new Set());
+    // Bật ở tab Localization → cắt dict i18n về đúng 1 locale đang chọn, CHỈ ở
+    // output divjson. Dữ liệu gốc trong customVariables vẫn đủ mọi locale.
+    singleLocaleMode = writable<boolean>(false);
 
     divjsonStore = derived(
-        [this.tree, this.products, this.screenId, this.screenLabel, this.screenType],
+        [
+            this.tree, this.products, this.screenId, this.screenLabel, this.screenType,
+            this.singleLocaleMode, this.previewLanguageCode
+        ],
         ([root, productsList, screenId, screenLabel, screenType]) => {
             const {
                 shortObject,
@@ -177,6 +183,8 @@ export class State {
     valueFilters?: ValueFilters;
 
     private getTranslationKey: GetTranslationKey | undefined;
+    // Localize: dịch 1 chuỗi nguồn sang nhiều locale (engine ở backend, do host cấp).
+    translateApi: ((text: string, from: string, targets: string[]) => Promise<Record<string, string>>) | undefined;
 
     lang: Writable<Locale> = writable('en');
     l10n = derived(this.lang, lang => {
@@ -207,16 +215,19 @@ export class State {
     constructor({
         locale,
         fileLimits,
-        getTranslationKey
+        getTranslationKey,
+        translate
     }: {
         locale: Locale;
         fileLimits: FileLimits | undefined;
         getTranslationKey: GetTranslationKey | undefined;
+        translate?: (text: string, from: string, targets: string[]) => Promise<Record<string, string>>;
     }) {
         this.lang.set(locale);
         this.fileLimits = fileLimits;
 
         this.getTranslationKey = getTranslationKey;
+        this.translateApi = translate;
 
         this.selectedLeaf.subscribe(leaf => {
             this.selectedElem.set(leaf?.props.node || null);
@@ -625,10 +636,25 @@ export class State {
             }
         }
 
+        // Single locale mode (tab Localization): cắt dict i18n về đúng 1 key = locale đang
+        // active, CHỈ ở output này — không đụng tới customVariables (dữ liệu gốc để sửa/dịch
+        // vẫn đủ mọi locale). Toggle checkbox → divjsonStore tự tính lại (xem dependency ở trên).
+        const singleLocale = get(this.singleLocaleMode);
+        const activeLocale = get(this.previewLanguageCode);
+        const i18nNames = get(this.i18nMarkedVars);
+
         for (const customVariable of get(this.customVariables)) {
             try {
-                const value = parseVariableValue(customVariable);
+                let value = parseVariableValue(customVariable);
                 const { type, name } = customVariable;
+
+                if (
+                    singleLocale && type === 'dict' && i18nNames.has(name) &&
+                    value && typeof value === 'object' && !Array.isArray(value) &&
+                    activeLocale in (value as Record<string, unknown>)
+                ) {
+                    value = { [activeLocale]: (value as Record<string, unknown>)[activeLocale] };
+                }
 
                 variables.push({
                     type,

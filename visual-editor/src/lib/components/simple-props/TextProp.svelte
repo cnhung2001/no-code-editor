@@ -6,6 +6,7 @@
     import { APP_CTX, type AppContext } from '../../ctx/appContext';
     import { LANGUAGE_CTX, type LanguageContext } from '../../ctx/languageContext';
     import { tankerKeyToVariableName } from '../../utils/tanker';
+    import { buildLocalize, runTranslate, canLocalize as canLocalizeText } from '../../data/localize';
     import { calcSelectionOffset, getInnerText, setSelectionOffset } from '../../utils/contenteditable';
     import { parseConstraint } from '../../utils/parseConstraint';
     import { supportsPlainTextOnly } from '../../utils/supportsPlainTextOnly';
@@ -71,6 +72,29 @@
             } catch { return v.value; }
         }
         return v.value;
+    }
+
+    // ── Localize: tạo biến locale_ + gắn vào text + tự dịch (helper chung) ─
+    // Bỏ qua các prop đã tắt chèn biến (id, accessibility.description) — thay
+    // literal ở đó bằng expression sẽ làm hỏng layout.
+    let localizing = false;
+    let localizeError = '';
+    $: canLocalize = canLocalizeText(value) && (item as StringProperty).showInsertVariable !== false;
+
+    async function localize(): Promise<void> {
+        const { value: newValue, jobs } = buildLocalize(state, value || '');
+        if (!jobs.length) return;
+        value = newValue;
+        dispatch('change', { value, item });
+        localizing = true;
+        localizeError = '';
+        try {
+            await runTranslate(state, jobs);
+        } catch (e) {
+            localizeError = String((e as Error)?.message || e);
+        } finally {
+            localizing = false;
+        }
     }
 
     function doInsertAtCursor(expr: string) {
@@ -311,6 +335,18 @@
 {/if}
 
 <svelte:window on:click={showPicker ? onClickOutside : null} />
+
+{#if !number && !$readOnly && !tankerToggled && canLocalize}
+    <button
+        class="text-prop__insert-btn"
+        on:click={localize}
+        disabled={localizing}
+        title="Tạo biến locale_ + gắn vào text + tự dịch mọi ngôn ngữ"
+    >{localizing ? '⏳ Localizing…' : '🌐 Localize'}</button>
+{/if}
+{#if localizeError}
+    <div class="text-prop__error" style="color:#c0392b;font-size:11px;margin-top:2px;">{localizeError}</div>
+{/if}
 
 {#if showInsertVariable && !number && !$readOnly && !tankerToggled && (localeVars.length || regularVars.length)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->

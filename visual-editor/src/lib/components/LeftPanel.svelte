@@ -8,6 +8,7 @@
     import Timers from './Timers.svelte';
     import Products from './Products.svelte';
     import TankerPanel from './TankerPanel.svelte';
+    import LocalizationEditor from './LocalizationEditor.svelte';
     import { APP_CTX, type AppContext } from '../ctx/appContext';
 
     export let activeTab: LeftBarTab;
@@ -86,6 +87,8 @@
         <Products />
     {:else if activeTab === 'tanker'}
         <TankerPanel />
+    {:else if activeTab === 'localization'}
+        <LocalizationEditor />
     {/if}
 
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

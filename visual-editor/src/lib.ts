@@ -146,6 +146,8 @@ export interface DivProEditorApi {
     updateTranslationEntry?: UpdateTranslationEntry;
     deleteTranslationEntry?: DeleteTranslationEntry;
     refreshTranslations?: () => Promise<void>;
+    /** Localize: dịch 1 chuỗi nguồn sang nhiều locale. Trả { locale: text }. */
+    translate?(text: string, from: string, targets: string[]): Promise<Record<string, string>>;
 }
 
 export interface Source {
@@ -252,7 +254,8 @@ export const DivProEditor = {
         const state = new State({
             locale: opts.locale || 'en',
             fileLimits: opts.fileLimits,
-            getTranslationKey: opts.api?.getTranslationKey
+            getTranslationKey: opts.api?.getTranslationKey,
+            translate: opts.api?.translate
         });
 
         state.paletteEnabled.set(opts.paletteEnabled ?? true);

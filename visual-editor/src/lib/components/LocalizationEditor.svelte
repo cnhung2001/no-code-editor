@@ -6,22 +6,11 @@
     import { walk } from '../utils/tree';
     import { ChangeCustomVariablesCommand } from '../data/commands/changeCustomVariables';
     import type { Variable } from '../data/customVariables';
+    import { LOCALE_LABELS, SUPPORTED_LOCALES } from '../data/locales';
     import PanelTitle from './PanelTitle.svelte';
 
     const { state } = getContext<AppContext>(APP_CTX);
-    const { customVariables, tree, readOnly, previewLanguageCode, i18nMarkedVars } = state;
-
-    const LOCALE_LABELS: Record<string, string> = {
-        en: 'English', vi: 'Tiếng Việt', ar: 'العربية', zh: '中文',
-        fr: 'Français', de: 'Deutsch', es: 'Español', pt: 'Português',
-        ru: 'Русский', ja: '日本語', ko: '한국어', it: 'Italiano',
-        nl: 'Nederlands', tr: 'Türkçe', pl: 'Polski', uk: 'Українська',
-        th: 'ภาษาไทย', id: 'Bahasa Indonesia', ms: 'Bahasa Melayu',
-        hi: 'हिन्दी', cs: 'Čeština', da: 'Dansk', fi: 'Suomi',
-        el: 'Ελληνικά', he: 'עברית', hr: 'Hrvatski', hu: 'Magyar',
-        no: 'Norsk', ro: 'Română', sk: 'Slovenčina', sv: 'Svenska',
-        ca: 'Català'
-    };
+    const { customVariables, tree, readOnly, previewLanguageCode, i18nMarkedVars, singleLocaleMode } = state;
 
     function escapeRegex(s: string): string {
         return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -102,6 +91,49 @@
         const newList = get(customVariables).filter(v => v.name !== varName);
         state.pushCommand(new ChangeCustomVariablesCommand(state, newList));
         i18nMarkedVars.update(s => { const n = new Set(s); n.delete(varName); return n; });
+    }
+
+    // ── Auto-translate (engine ở backend qua state.translateApi) ──────────
+    let translatingVars = new Set<string>();
+    let translatingAll = false;
+    let translateError = '';
+
+    // Dịch các locale CÒN THIẾU/RỖNG của 1 key (không đè bản đã có).
+    async function translateVar(v: Variable): Promise<void> {
+        if (!state.translateApi) { translateError = 'Chưa cấu hình dịch (MT_PROVIDER)'; return; }
+        let dict: Record<string, string>;
+        try { dict = JSON.parse(v.value); } catch { return; }
+        const from = get(previewLanguageCode) || 'en';
+        const source = dict[from] || dict['en'] || '';
+        if (!source) { translateError = `Key "${v.name}" chưa có text nguồn (${from})`; return; }
+        const targets = SUPPORTED_LOCALES.filter(l => l !== from && !dict[l]);
+        if (!targets.length) return;
+        translatingVars.add(v.name); translatingVars = translatingVars;
+        translateError = '';
+        try {
+            const res = await state.translateApi(source, from, targets);
+            const newDict = { ...dict };
+            for (const [loc, text] of Object.entries(res)) if (text) newDict[loc] = text;
+            const newList = get(customVariables).map(x =>
+                x.name === v.name ? { ...x, value: JSON.stringify(newDict) } : x);
+            state.pushCommand(new ChangeCustomVariablesCommand(state, newList));
+        } catch (e) {
+            translateError = String((e as Error)?.message || e);
+        } finally {
+            translatingVars.delete(v.name); translatingVars = translatingVars;
+        }
+    }
+
+    // Dịch tất cả key i18n (chỉ điền chỗ thiếu), tuần tự để tránh rate-limit.
+    async function translateAllMissing(): Promise<void> {
+        if (translatingAll) return;
+        translatingAll = true;
+        translateError = '';
+        try {
+            for (const v of get(i18nVars)) await translateVar(v);
+        } finally {
+            translatingAll = false;
+        }
     }
 
     let editingKey: string | null = null;
@@ -261,6 +293,12 @@
         {/if}
     </div>
 
+    <!-- Export mode -->
+    <label class="loc-editor__single-locale" title="Khi Save/Push: cắt các dict i18n về đúng 1 key (locale đang chọn ở trên) thay vì lưu full mọi ngôn ngữ">
+        <input type="checkbox" bind:checked={$singleLocaleMode} disabled={$readOnly} />
+        Single locale mode (export only «{$previewLanguageCode}»)
+    </label>
+
     <!-- Search -->
     <div class="loc-editor__search">
         <input
@@ -270,6 +308,21 @@
             placeholder="Search keys..."
         />
     </div>
+
+    <!-- Translate toolbar -->
+    {#if !$readOnly && $i18nVars.length}
+        <div class="loc-editor__add-locale" style="padding:6px 10px;">
+            <button
+                class="loc-editor__add-btn"
+                on:click={translateAllMissing}
+                disabled={translatingAll}
+                title="Dịch các ô còn thiếu cho mọi key (engine backend)"
+            >{translatingAll ? 'Translating…' : '🌐 Translate all missing'}</button>
+        </div>
+    {/if}
+    {#if translateError}
+        <div class="loc-editor__error" style="padding:4px 10px;">{translateError}</div>
+    {/if}
 
     <!-- List -->
     <div class="loc-editor__list">
@@ -312,6 +365,10 @@
                             </svg>
                         </button>
                         {#if !$readOnly}
+                            <button class="loc-editor__edit-icon" title="Translate missing locales"
+                                on:click|stopPropagation={() => translateVar(v)}
+                                disabled={translatingVars.has(v.name)}
+                            >{translatingVars.has(v.name) ? '⏳' : '🌐'}</button>
                             <button class="loc-editor__edit-icon" title="Rename key" on:click|stopPropagation={() => startEditKey(v.name)}>
                                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                                     <path d="M9 1.5l2.5 2.5-7 7H2v-2.5l7-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
@@ -491,6 +548,22 @@
         display: flex;
         gap: 6px;
         margin-top: 8px;
+    }
+
+    .loc-editor__single-locale {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--fill-transparent-2);
+        flex-shrink: 0;
+        font-size: 12px;
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+
+    .loc-editor__single-locale input {
+        cursor: pointer;
     }
 
     .loc-editor__search {

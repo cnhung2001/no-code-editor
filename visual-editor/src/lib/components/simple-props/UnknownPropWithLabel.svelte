@@ -15,6 +15,7 @@
     import { isPaletteColor } from '../../data/palette';
     import sourceIcon from '../../../assets/source.svg?raw';
     import ExpressionValue from './ExpressionValue.svelte';
+    import { buildLocalize, runTranslate, canLocalize } from '../../data/localize';
     import lightThemeIcon from '../../../assets/lightTheme.svg?url';
     import darkThemeIcon from '../../../assets/darkTheme.svg?url';
 
@@ -72,6 +73,25 @@
             value,
             item
         });
+    }
+
+    // ── Localize cho text HỖN HỢP (literal + @{...}) ở chế độ Expression ──
+    let localizing = false;
+    let localizeError = '';
+    async function localize(): Promise<void> {
+        const { value: newValue, jobs } = buildLocalize(state, String(value ?? ''));
+        if (!jobs.length) return;
+        value = newValue;
+        dispatch('change', { value, item });
+        localizing = true;
+        localizeError = '';
+        try {
+            await runTranslate(state, jobs);
+        } catch (e) {
+            localizeError = String((e as Error)?.message || e);
+        } finally {
+            localizing = false;
+        }
     }
 
     function onPerThemeChange(): void {
@@ -256,6 +276,14 @@
             {evalValue}
             on:click={onSourceClick}
         />
+        {#if !$readOnly && item.type === 'string' && canLocalize(value)}
+            <button class="unknown-prop__localize" on:click={localize} disabled={localizing}>
+                {localizing ? '⏳ Localizing…' : '🌐 Localize'}
+            </button>
+            {#if localizeError}
+                <div class="unknown-prop__localize-error">{localizeError}</div>
+            {/if}
+        {/if}
     {:else}
         <UnknownProp
             {item}
@@ -277,6 +305,31 @@
         font-size: 14px;
         line-height: 20px;
         color: var(--text-secondary);
+    }
+
+    .unknown-prop__localize {
+        margin-top: 6px;
+        padding: 5px 10px;
+        font: inherit;
+        font-size: 13px;
+        color: inherit;
+        border: none;
+        border-radius: 6px;
+        background: var(--fill-transparent-1);
+        cursor: pointer;
+        transition: background-color .15s ease-in-out;
+    }
+    .unknown-prop__localize:hover:not(:disabled) {
+        background: var(--fill-accent-2);
+    }
+    .unknown-prop__localize:disabled {
+        opacity: .6;
+        cursor: default;
+    }
+    .unknown-prop__localize-error {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #c0392b;
     }
 
     .unknown-prop__tanker {

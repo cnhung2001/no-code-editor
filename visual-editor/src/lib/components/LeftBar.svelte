@@ -46,12 +46,11 @@
             </svg>`
         },
         {
-            id: 'tanker',
-            label: 'Tanker',
+            id: 'localization',
+            label: 'Localization',
             icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 20 20">
-                <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.5"/>
-                <ellipse cx="10" cy="10" rx="3" ry="7.5" stroke="currentColor" stroke-width="1.5"/>
-                <path stroke="currentColor" stroke-width="1.5" d="M2.5 7.5h15M2.5 12.5h15"/>
+                <path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M2.5 5h7M6 5V3M8.75 5c0 3.4-2.4 6.1-6.25 7.4M4.5 8.2c.85 1.85 2.3 3.2 4.1 3.9"/>
+                <path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M10.5 17.5l3.25-8 3.25 8M11.8 14.8h3.9"/>
             </svg>`
         }
     ];
