@@ -112,6 +112,10 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .meta-modal-body dl { display: grid; grid-template-columns: 92px 1fr; gap: 8px 12px; margin: 0; font-size: 13px; }
 .meta-modal-body dt { color: var(--ink-3); }
 .meta-modal-body dd { margin: 0; word-break: break-all; }
+.meta-copy { display: flex; align-items: flex-start; gap: 4px; }
+.meta-copy > span { min-width: 0; }
+.meta-copy .icon-btn { flex: none; margin-top: -3px; }
+.meta-copy .icon-btn.copied, .meta-copy .icon-btn.copied:hover { color: #12a150; }
 .p-stage { background: #eceae2; overflow: hidden; position: relative; }
 .p-meta { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 18px; }
 .p-meta h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin: 0 0 8px; }

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
+import { objectUrl } from '../s3/publicUrl';
+import { copyText } from '../lib/clipboard';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
 import { resolveAssets } from '../editor/resolveAssets';
@@ -28,6 +30,8 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
     const [dirty, setDirty] = useState(false);
     const [toast, setToast] = useState('');
     const [showMeta, setShowMeta] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const copyTimer = useRef(0);
 
     useEffect(() => {
         let alive = true;
@@ -43,6 +47,8 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
             alive = false;
         };
     }, [file.key, project]);
+
+    useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
     function flash(msg: string) {
         setToast(msg);
@@ -64,6 +70,18 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
         await s3.putObject(file.key, toSaveFormat(v), 'draft', extractMeta(v));
         setDirty(false);
         flash(`Draft saved · s3://ik-nocode-paywall/${file.key}`);
+    }
+
+    async function copyPath() {
+        if (!file.key) return;
+        try {
+            await copyText(objectUrl(file.key));
+            setCopied(true);
+            window.clearTimeout(copyTimer.current);
+            copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+            flash('Không copy được — hãy chọn và copy tay từ ô S3 path');
+        }
     }
 
     function push() {
@@ -114,7 +132,20 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         </header>
                         <div className="meta-modal-body">
                             <dl>
-                                <dt>S3 path</dt><dd>s3://ik-nocode-paywall/{file.key}</dd>
+                                <dt>S3 path</dt>
+                                <dd className="meta-copy">
+                                    <span>{file.key ? objectUrl(file.key) : '—'}</span>
+                                    {file.key && (
+                                        <button
+                                            className={`icon-btn${copied ? ' copied' : ''}`}
+                                            title="Copy S3 path"
+                                            aria-label="Copy S3 path"
+                                            onClick={copyPath}
+                                        >
+                                            {copied ? Icon.check : Icon.copy}
+                                        </button>
+                                    )}
+                                </dd>
                                 <dt>log_id</dt><dd>{raw ? extractLogId(raw) : '—'}</dd>
                                 <dt>Version</dt><dd>{file.version || '—'}</dd>
                                 <dt>Status</dt><dd>{file.status || '—'}</dd>
