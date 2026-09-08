@@ -46,6 +46,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     // Toàn bộ file của project (đệ quy). Dùng cho hai việc: danh sách Assets, và
     // biết folder nào chỉ chứa asset để loại khỏi lưới layout.
     const [projectFiles, setProjectFiles] = useState<S3Item[]>([]);
+    const [projectLoaded, setProjectLoaded] = useState(false);
     // Loại của từng .json, do JsonThumb báo lên sau khi tải nội dung: tên file
     // không phân biệt được card DivKit với animation Lottie.
     const [kinds, setKinds] = useState<Record<string, JsonKind>>({});
@@ -73,13 +74,15 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     useEffect(() => {
         let alive = true;
         setProjectFiles([]);
+        setProjectLoaded(false);
         if (!project) return;
         s3.listPath(`${project}/`, { recursive: true })
             .then((res) => alive && setProjectFiles(res))
             .catch(() => {
                 /* asset chỉ là phần phụ của lưới — lỗi ở đây không nên chặn view.
                    Không có danh sách thì không ẩn folder nào: thà thừa hơn thiếu. */
-            });
+            })
+            .finally(() => alive && setProjectLoaded(true));
         return () => {
             alive = false;
         };
@@ -95,6 +98,10 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 
     const inProject = path.length >= 1;
     const searching = q.trim().length > 0;
+    // Danh sách prefix về trước danh sách đệ quy, mà chỉ danh sách sau mới biết
+    // folder nào chỉ chứa asset. Vẽ sớm là để folder assets nhấp nháy hiện lên
+    // rồi biến mất, nên shimmer giữ tới khi biết đủ để vẽ đúng một lần.
+    const gridLoading = loading || (inProject && !projectLoaded);
     // Khung chính chỉ có layout: bỏ file asset, và bỏ luôn những folder mà bên
     // trong không có layout nào (images/, videos/, anim/…) — asset đã có view
     // riêng gom cả project nên không mất gì.
@@ -178,13 +185,13 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
             </header>
 
             <div className="b-meta">
-                {loading ? <Dots label="Đang tải" /> : `${shownCount} mục`}
+                {gridLoading ? <Dots label="Đang tải" /> : `${shownCount} mục`}
                 {err && <span className="b-err"> · Lỗi: {err}</span>}
             </div>
 
             <div className="cards">
-                {loading && visible.length === 0 && <SkeletonCards n={8} />}
-                {visible.map((it) => (
+                {gridLoading && <SkeletonCards n={8} />}
+                {!gridLoading && visible.map((it) => (
                     <div key={it.name} className="card-wrap">
                         <button className="card" onClick={() => onOpen(it)}>
                             <div className={'card-thumb ' + it.type + thumbShape(it, kinds)}>
