@@ -7,6 +7,7 @@ import { usePerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
 import { LayoutThumb } from './LayoutThumb';
+import { AssetMedia, AssetsMosaic, isPreviewableAsset } from './AssetPreview';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
     const map: Record<string, [string, string]> = {
@@ -132,8 +133,8 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                 {showAssetCard && (
                     <div className="card-wrap">
                         <button className="card" onClick={() => setAssetsOpen(true)}>
-                            <div className="card-thumb folder">
-                                <span className="thumb-big">{Icon.folder}</span>
+                            <div className={'card-thumb ' + (assets.some(isPreviewableAsset) ? 'assets' : 'folder')}>
+                                <AssetsMosaic items={assets} />
                             </div>
                             <div className="card-body">
                                 <div className="card-name">
@@ -149,7 +150,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                     <div key={it.name} className="card-wrap">
                         <button className="card" onClick={() => onOpen(it)}>
                             <div className={'card-thumb ' + it.type + (hasPreview(it) ? ' live' : '')}>
-                                <CardThumb item={it} prefix={prefix} project={path[0] || ''} />
+                                <CardThumb item={it} project={path[0] || ''} />
                             </div>
                             <div className="card-body">
                                 <div className="card-name">
@@ -208,25 +209,13 @@ function thumbIcon(type: S3Item['type']) {
     return Icon.json;
 }
 
-// Thumbnail: ảnh thật resolve qua presign/CDN; layout JSON render thu nhỏ;
-// còn lại dùng icon lớn.
-function CardThumb({ item, prefix, project }: { item: S3Item; prefix: string; project: string }) {
-    const [src, setSrc] = useState<string | null>(null);
-    useEffect(() => {
-        let alive = true;
-        if (item.type === 'image' && item.key) {
-            s3.getAssetUrl(item.key).then((u) => alive && setSrc(u)).catch(() => {});
-        }
-        return () => {
-            alive = false;
-        };
-    }, [item, prefix]);
-
-    if (item.type === 'image') {
-        return src ? <img src={src} alt={item.name} /> : <span className="thumb-big">{Icon.image}</span>;
-    }
+// Thumbnail: layout JSON render thu nhỏ; ảnh và video lấy từ CDN; còn lại icon lớn.
+function CardThumb({ item, project }: { item: S3Item; project: string }) {
     if (hasPreview(item) && item.key) {
         return <LayoutThumb itemKey={item.key} project={project} fallback={Icon.json} />;
+    }
+    if (isPreviewableAsset(item)) {
+        return <AssetMedia item={item} fallback={thumbIcon(item.type)} />;
     }
     return <span className="thumb-big">{thumbIcon(item.type)}</span>;
 }
