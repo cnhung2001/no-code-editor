@@ -64,6 +64,33 @@ function releaseSlot(): void {
     active = Math.max(active - 1, 0);
 }
 
+interface Fit {
+    scale: number;
+    /** Lệch trái/trên để căn giữa, tính bằng px của tile. */
+    x: number;
+    y: number;
+}
+
+/**
+ * Fit trọn khung 375x812 vào tile: lấy chiều bị bó hẹp hơn nên không crop gì,
+ * rồi căn giữa bằng translate.
+ *
+ * Cố tình không nhờ CSS căn: khung render to hơn tile, mà `margin: auto` trên
+ * một box absolute rộng hơn khung chứa thì spec cho margin về 0 — box dồn về
+ * mép trái và bị cắt bên phải, chứ không căn giữa.
+ *
+ * translate trước scale, với transform-origin ở góc trên-trái: box được đặt
+ * đúng chỗ rồi mới thu nhỏ quanh chính điểm đó.
+ */
+function fitInside(width: number, height: number): Fit {
+    const scale = Math.min(width / PREVIEW_WIDTH, height / PREVIEW_HEIGHT);
+    return {
+        scale,
+        x: (width - PREVIEW_WIDTH * scale) / 2,
+        y: (height - PREVIEW_HEIGHT * scale) / 2
+    };
+}
+
 interface Props {
     /** Key S3 của file layout. */
     itemKey: string;
@@ -77,11 +104,8 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
     const stageRef = useRef<HTMLDivElement>(null);
     const [ready, setReady] = useState(false);
     const [failed, setFailed] = useState(false);
-    const [scale, setScale] = useState(0);
+    const [fit, setFit] = useState<Fit>({ scale: 0, x: 0, y: 0 });
 
-    // Fit trọn màn vào tile: lấy chiều bị bó hẹp hơn, nên không có gì bị crop.
-    // Tile mang đúng tỉ lệ 375x812 (xem .card-thumb.live) nên hai chiều ra cùng
-    // một số; min() là để một tile lệch tỉ lệ vẫn không tràn.
     useEffect(() => {
         const box = boxRef.current;
         if (!box) return;
@@ -89,10 +113,13 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
         // click hay tab-focus — pointer-events lo phần chuột, inert lo phần
         // bàn phím và a11y tree.
         stageRef.current?.setAttribute('inert', '');
-        const observer = new ResizeObserver(() => setScale(Math.min(
-            box.clientWidth / PREVIEW_WIDTH,
-            box.clientHeight / PREVIEW_HEIGHT
-        )));
+
+        const observer = new ResizeObserver(() => {
+            const width = box.clientWidth;
+            const height = box.clientHeight;
+            if (!width || !height) return; // chưa layout xong
+            setFit(fitInside(width, height));
+        });
         observer.observe(box);
         return () => observer.disconnect();
     }, []);
@@ -185,8 +212,8 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
                 style={{
                     width: PREVIEW_WIDTH,
                     height: PREVIEW_HEIGHT,
-                    transform: `scale(${scale})`,
-                    visibility: ready && scale > 0 ? 'visible' : 'hidden'
+                    transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.scale})`,
+                    visibility: ready && fit.scale > 0 ? 'visible' : 'hidden'
                 }}
             />
             {!ready && <span className="thumb-big">{fallback}</span>}
