@@ -43,7 +43,9 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     // trong subfolder (images/, videos/), nên gom theo từng thư mục thì mỗi chỗ
     // thấy một phần. Mở bằng nút trên thanh search.
     const [assetsOpen, setAssetsOpen] = useState(false);
-    const [projectAssets, setProjectAssets] = useState<S3Item[]>([]);
+    // Toàn bộ file của project (đệ quy). Dùng cho hai việc: danh sách Assets, và
+    // biết folder nào chỉ chứa asset để loại khỏi lưới layout.
+    const [projectFiles, setProjectFiles] = useState<S3Item[]>([]);
     // Loại của từng .json, do JsonThumb báo lên sau khi tải nội dung: tên file
     // không phân biệt được card DivKit với animation Lottie.
     const [kinds, setKinds] = useState<Record<string, JsonKind>>({});
@@ -70,23 +72,37 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 
     useEffect(() => {
         let alive = true;
-        setProjectAssets([]);
+        setProjectFiles([]);
         if (!project) return;
         s3.listPath(`${project}/`, { recursive: true })
-            .then((res) => alive && setProjectAssets(res.filter(isAsset)))
+            .then((res) => alive && setProjectFiles(res))
             .catch(() => {
-                /* asset chỉ là phần phụ của lưới — lỗi ở đây không nên chặn view */
+                /* asset chỉ là phần phụ của lưới — lỗi ở đây không nên chặn view.
+                   Không có danh sách thì không ẩn folder nào: thà thừa hơn thiếu. */
             });
         return () => {
             alive = false;
         };
     }, [project]);
 
+    const projectAssets = useMemo(() => projectFiles.filter(isAsset), [projectFiles]);
+    const assetFolders = useMemo(
+        () => assetOnlyFolders(projectFiles, prefix),
+        [projectFiles, prefix]
+    );
+
     const filtered = useMemo(() => filterByName(items, q), [items, q]);
 
     const inProject = path.length >= 1;
     const searching = q.trim().length > 0;
-    const nonAssets = useMemo(() => filtered.filter((it) => !isAsset(it)), [filtered]);
+    // Khung chính chỉ có layout: bỏ file asset, và bỏ luôn những folder mà bên
+    // trong không có layout nào (images/, videos/, anim/…) — asset đã có view
+    // riêng gom cả project nên không mất gì.
+    const nonAssets = useMemo(
+        () => filtered.filter((it) => !isAsset(it) &&
+            !(it.type === 'folder' && assetFolders.has(it.name))),
+        [filtered, assetFolders]
+    );
     // Chỉ gom khi đang trong project và không tìm kiếm (tìm kiếm → phẳng để tìm cả asset).
     const grouped = inProject && !searching;
     const assetsView = grouped && assetsOpen;
@@ -108,7 +124,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         try {
             await s3.deleteObject(it.key);
             setItems((prev) => prev.filter((x) => x.key !== it.key));
-            setProjectAssets((prev) => prev.filter((x) => x.key !== it.key));
+            setProjectFiles((prev) => prev.filter((x) => x.key !== it.key));
         } catch (e) {
             setErr(String((e as Error).message || e));
         } finally {
@@ -216,6 +232,33 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 }
 
 const BUCKET_LABEL = 'ik-nocode-paywall';
+
+/**
+ * Tên những folder con của `prefix` mà cả cây bên dưới không có layout nào.
+ *
+ * Xét theo nội dung chứ không theo tên: một folder tên "videos" vẫn có thể có
+ * layout, và một folder tên bất kỳ vẫn có thể chỉ chứa ảnh. `files` là danh
+ * sách đệ quy của cả project nên phủ được folder lồng nhiều tầng.
+ */
+function assetOnlyFolders(files: S3Item[], prefix: string): Set<string> {
+    const folders = new Set<string>();
+    const withLayout = new Set<string>();
+
+    for (const file of files) {
+        if (!file.key?.startsWith(prefix)) continue;
+        const rest = file.key.slice(prefix.length);
+        const slash = rest.indexOf('/');
+        if (slash < 0) continue; // file nằm ngay tại prefix, không thuộc folder con
+        const folder = rest.slice(0, slash);
+        folders.add(folder);
+        if (!isAsset(file)) withLayout.add(folder);
+    }
+
+    for (const folder of withLayout) {
+        folders.delete(folder);
+    }
+    return folders;
+}
 
 function filterByName(items: S3Item[], q: string): S3Item[] {
     const needle = q.trim().toLowerCase();
