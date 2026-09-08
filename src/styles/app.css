@@ -102,8 +102,10 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 /* Tile mang đúng tỉ lệ màn hình đang render, nhờ đó fit trọn layout mà không
    để lại dải trống hai bên. */
 .card-thumb.live { display: block; position: relative; flex: none; height: auto; aspect-ratio: 375 / 812; background: #fff; }
+/* Lottie không phải một màn hình: giữ tile vuông, animation tự fit vào trong. */
+.card-thumb.anim { display: block; position: relative; flex: none; height: auto; aspect-ratio: 1; background: #fff; }
 /* Icon chờ/thất bại: nền tile là trắng nên màu trắng mặc định sẽ vô hình. */
-.card-thumb.live .thumb-big { color: #c6c9c3; }
+.card-thumb.live .thumb-big, .card-thumb.anim .thumb-big { color: #c6c9c3; }
 /* inset thay cho height:100%: chiều cao của tile do aspect-ratio sinh ra, đo
    qua phần trăm là chỗ dễ ra 0. */
 .thumb-live { position: absolute; inset: 0; overflow: hidden; background: #fff; display: grid; place-items: center; }

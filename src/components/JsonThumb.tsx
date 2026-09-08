@@ -1,11 +1,17 @@
-// ── Thumbnail của layout: render card thật rồi thu nhỏ ────────────────────
-// Card DivKit không có ảnh sẵn trên S3, nên "hình ảnh preview" ở đây là một
-// bản render thu nhỏ bằng chính engine mà editor dùng — thumbnail không bao
-// giờ lệch với những gì mở ra sẽ thấy.
+// ── Thumbnail cho file .json trong bucket ─────────────────────────────────
+// Không có ảnh sẵn trên S3, nên "hình ảnh preview" là một bản render thu nhỏ
+// bằng chính engine mà editor dùng — thumbnail không bao giờ lệch với những
+// gì mở ra sẽ thấy.
+//
+// `.json` trong một project có thể là card DivKit hoặc animation Lottie
+// (anim_chart.json, anim_gift.json…), mà tên file thì không nói lên điều gì.
+// Nên phải phân loại theo nội dung rồi mới chọn cách render và tỉ lệ tile.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { renderCardPreview } from '@divkitframework/visual-editor';
-import type { CardPreviewInstance } from '@divkitframework/visual-editor';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { detectJsonKind, renderCardPreview, renderLottiePreview } from '@divkitframework/visual-editor';
+import type {
+    CardPreviewInstance, JsonKind, LottiePreviewInstance
+} from '@divkitframework/visual-editor';
 import '@divkitframework/visual-editor/dist/divkit-editor.css';
 import { s3 } from '../s3';
 import { resolveAssets } from '../editor/resolveAssets';
@@ -92,19 +98,30 @@ function fitInside(width: number, height: number): Fit {
 }
 
 interface Props {
-    /** Key S3 của file layout. */
+    /** Key S3 của file. */
     itemKey: string;
     project: string;
-    /** Icon dùng khi chưa render xong hoặc layout không dựng được. */
+    /** Icon dùng khi chưa render xong hoặc file không dựng được. */
     fallback: ReactNode;
+    /**
+     * Báo lên loại json vừa nhận ra. Tỉ lệ tile do card cha quyết định (card
+     * DivKit là khung điện thoại, Lottie thì vuông), mà loại thì chỉ biết được
+     * sau khi tải nội dung về.
+     */
+    onKind?(kind: JsonKind): void;
 }
 
-export function LayoutThumb({ itemKey, project, fallback }: Props) {
+export function JsonThumb({ itemKey, project, fallback, onKind }: Props) {
     const boxRef = useRef<HTMLDivElement>(null);
     const stageRef = useRef<HTMLDivElement>(null);
     const [ready, setReady] = useState(false);
     const [failed, setFailed] = useState(false);
     const [fit, setFit] = useState<Fit>({ scale: 0, x: 0, y: 0 });
+    const [kind, setKind] = useState<JsonKind | null>(null);
+    // Giữ trong ref: effect render không được phụ thuộc vào callback của cha,
+    // nếu không một arrow inline sẽ khiến nó dựng lại mỗi lần cha re-render.
+    const onKindRef = useRef(onKind);
+    onKindRef.current = onKind;
 
     useEffect(() => {
         const box = boxRef.current;
@@ -129,7 +146,7 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
         if (!box || failed) return;
 
         let alive = true;
-        let instance: CardPreviewInstance | null = null;
+        let instance: CardPreviewInstance | LottiePreviewInstance | null = null;
         let holdsSlot = false;
         let pending = false;
         // Mỗi lần trạng thái đổi (dựng mới / bỏ đi) là một token mới. Một lượt
@@ -170,10 +187,28 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
                     release();
                     return;
                 }
+                const kind = detectJsonKind(json);
+                setKind(kind);
+                onKindRef.current?.(kind);
+                if (kind === 'unknown') {
+                    // Json hợp lệ nhưng không phải thứ dựng được — để icon.
+                    pending = false;
+                    release();
+                    return;
+                }
+
                 // Dọn trước khi dựng: tile cuộn ra rồi vào lại là render nhiều
                 // lượt trên cùng một node.
                 stage.innerHTML = '';
-                instance = renderCardPreview({ node: stage, value: json, theme: 'light' });
+                instance = kind === 'lottie' ?
+                    await renderLottiePreview({ node: stage, value: json }) :
+                    renderCardPreview({ node: stage, value: json, theme: 'light' });
+                if (!alive || mine !== token) {
+                    instance.destroy();
+                    instance = null;
+                    release();
+                    return;
+                }
                 pending = false;
                 release();
                 setReady(true);
@@ -204,18 +239,20 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
         };
     }, [itemKey, project, failed]);
 
+    // Lottie tự fit svg vào khung chứa nên chỉ cần lấp đầy tile; card DivKit thì
+    // phải dựng trong khung 375x812 rồi thu nhỏ.
+    const stageStyle: CSSProperties = kind === 'lottie' ?
+        { width: '100%', height: '100%', visibility: ready ? 'visible' : 'hidden' } :
+        {
+            width: PREVIEW_WIDTH,
+            height: PREVIEW_HEIGHT,
+            transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.scale})`,
+            visibility: ready && fit.scale > 0 ? 'visible' : 'hidden'
+        };
+
     return (
         <div ref={boxRef} className="thumb-live">
-            <div
-                ref={stageRef}
-                className="thumb-live-stage"
-                style={{
-                    width: PREVIEW_WIDTH,
-                    height: PREVIEW_HEIGHT,
-                    transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.scale})`,
-                    visibility: ready && fit.scale > 0 ? 'visible' : 'hidden'
-                }}
-            />
+            <div ref={stageRef} className="thumb-live-stage" style={stageStyle} />
             {!ready && <span className="thumb-big">{fallback}</span>}
         </div>
     );

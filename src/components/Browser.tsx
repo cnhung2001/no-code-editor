@@ -1,12 +1,13 @@
 // ── Trình duyệt S3: breadcrumb + tìm kiếm + lưới card ─────────────────────
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
 import { usePerms } from '../auth/AuthContext';
+import type { JsonKind } from '@divkitframework/visual-editor';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
-import { LayoutThumb } from './LayoutThumb';
+import { JsonThumb } from './JsonThumb';
 import { AssetMedia, AssetsMosaic, isPreviewableAsset } from './AssetPreview';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
@@ -15,7 +16,7 @@ function StatusBadge({ status }: { status?: S3Item['status'] }) {
         draft: ['var(--amber)', 'Draft'],
         archived: ['#888', 'Archived']
     };
-    const [c, label] = map[status || 'draft'] || map.draft;
+    const [c, label] = map[status || ''] || map.draft;
     return (
         <span className="status">
             <span className="status-dot" style={{ background: c }} /> {label}
@@ -40,6 +41,13 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     const [deleting, setDeleting] = useState<string | null>(null);
     // Gom ảnh/video vào 1 "folder" Assets ảo (chỉ hiển thị, không đổi S3).
     const [assetsOpen, setAssetsOpen] = useState(false);
+    // Loại của từng .json, do JsonThumb báo lên sau khi tải nội dung: tên file
+    // không phân biệt được card DivKit với animation Lottie.
+    const [kinds, setKinds] = useState<Record<string, JsonKind>>({});
+    const noteKind = useCallback(
+        (key: string, kind: JsonKind) => setKinds((prev) => (prev[key] === kind ? prev : { ...prev, [key]: kind })),
+        []
+    );
 
     useEffect(() => {
         let alive = true;
@@ -149,8 +157,8 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                 {visible.map((it) => (
                     <div key={it.name} className="card-wrap">
                         <button className="card" onClick={() => onOpen(it)}>
-                            <div className={'card-thumb ' + it.type + (hasPreview(it) ? ' live' : '')}>
-                                <CardThumb item={it} project={path[0] || ''} />
+                            <div className={'card-thumb ' + it.type + thumbShape(it, kinds)}>
+                                <CardThumb item={it} project={path[0] || ''} onKind={noteKind} />
                             </div>
                             <div className="card-body">
                                 <div className="card-name">
@@ -162,9 +170,12 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                                         ? 'Folder'
                                         : `${fmtSize(it.size)} · ${fmtDate(it.modified)}`}
                                 </div>
-                                {it.type === 'json' && !it.config && (
+                                {/* Chỉ layout được push qua tool mới có metadata này; một
+                                    animation Lottie hay ảnh thì không, nên đừng dán nhãn
+                                    "Draft" cho thứ vốn không có vòng đời draft/live. */}
+                                {(it.status || it.version) && (
                                     <div className="card-foot">
-                                        <StatusBadge status={it.status} />
+                                        {it.status && <StatusBadge status={it.status} />}
                                         {it.version && <span className="ver">{it.version}</span>}
                                     </div>
                                 )}
@@ -209,10 +220,38 @@ function thumbIcon(type: S3Item['type']) {
     return Icon.json;
 }
 
-// Thumbnail: layout JSON render thu nhỏ; ảnh và video lấy từ CDN; còn lại icon lớn.
-function CardThumb({ item, project }: { item: S3Item; project: string }) {
-    if (hasPreview(item) && item.key) {
-        return <LayoutThumb itemKey={item.key} project={project} fallback={Icon.json} />;
+/**
+ * Tỉ lệ tile theo loại nội dung: card DivKit lấy khung điện thoại để fit trọn
+ * màn, còn lại giữ tile ngắn.
+ *
+ * Loại chỉ biết được sau khi tải nội dung, nên mặc định là khung điện thoại —
+ * phần lớn .json trong bucket là layout, đoán như vậy thì ít tile phải nhảy
+ * kích thước nhất.
+ */
+function thumbShape(it: S3Item, kinds: Record<string, JsonKind>): string {
+    if (!hasPreview(it) || !it.key) return '';
+    const kind = kinds[it.key];
+    if (kind === 'lottie' || kind === 'unknown') return ' anim';
+    return ' live';
+}
+
+// Thumbnail: json render thu nhỏ (card DivKit hoặc animation Lottie); ảnh và
+// video lấy từ CDN; còn lại icon lớn.
+function CardThumb({ item, project, onKind }: {
+    item: S3Item;
+    project: string;
+    onKind(key: string, kind: JsonKind): void;
+}) {
+    const key = item.key;
+    if (hasPreview(item) && key) {
+        return (
+            <JsonThumb
+                itemKey={key}
+                project={project}
+                fallback={Icon.json}
+                onKind={(kind) => onKind(key, kind)}
+            />
+        );
     }
     if (isPreviewableAsset(item)) {
         return <AssetMedia item={item} fallback={thumbIcon(item.type)} />;

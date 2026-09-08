@@ -59,6 +59,20 @@ declare module '@divkitframework/visual-editor' {
         destroy(): void;
     }
     export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance;
+
+    /** Một .json trong bucket có thể là card DivKit hay animation Lottie. */
+    export type JsonKind = 'divkit' | 'lottie' | 'unknown';
+    export function detectJsonKind(value: string): JsonKind;
+
+    export interface LottiePreviewOptions {
+        node: HTMLElement;
+        value: string;
+        loop?: boolean;
+    }
+    export interface LottiePreviewInstance {
+        destroy(): void;
+    }
+    export function renderLottiePreview(opts: LottiePreviewOptions): Promise<LottiePreviewInstance>;
 }
 
 declare module '@divkitframework/visual-editor/dist/divkit-editor.css';

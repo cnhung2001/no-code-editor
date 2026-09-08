@@ -29,6 +29,81 @@ export interface CardPreviewInstance {
 }
 
 /**
+ * Kind of json a `.json` in the bucket turns out to be.
+ *
+ * Extension and filename say nothing: a Lottie animation and a DivKit card are both `.json`, and
+ * both live next to each other in a project folder. Only the content settles it, and the caller
+ * needs to know before it decides how to render — and what shape to give it.
+ */
+export type JsonKind = 'divkit' | 'lottie' | 'unknown';
+
+export function detectJsonKind(value: string): JsonKind {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(value);
+    } catch {
+        return 'unknown';
+    }
+    if (!parsed || typeof parsed !== 'object') {
+        return 'unknown';
+    }
+
+    const obj = parsed as Record<string, unknown>;
+    // Same condition renderCardPreview and State.setDivJson insist on, kept here so the two
+    // cannot disagree about what counts as a card.
+    const card = ((obj.remote_layout ?? obj) as { card?: { states?: unknown[] } })?.card;
+    if (Array.isArray(card?.states) && card.states.length) {
+        return 'divkit';
+    }
+    // Lottie's header: a frame rate and a layer list. `layers` alone is not enough — it sits
+    // after `assets`, which in a card exported with embedded images is most of the file.
+    if (typeof obj.fr === 'number' && Array.isArray(obj.layers)) {
+        return 'lottie';
+    }
+    return 'unknown';
+}
+
+export interface LottiePreviewOptions {
+    node: HTMLElement;
+    /** Lottie animation json. */
+    value: string;
+    loop?: boolean;
+}
+
+export interface LottiePreviewInstance {
+    destroy(): void;
+}
+
+/**
+ * Plays a Lottie animation into `node`.
+ *
+ * lottie-web is loaded on demand — it is a 165 KB chunk that most sessions never touch, and it is
+ * already here for the `lottie` div extension, so previews cost no extra dependency.
+ */
+export async function renderLottiePreview(
+    opts: LottiePreviewOptions
+): Promise<LottiePreviewInstance> {
+    const { loadAnimation } = await import('./lottieApi');
+    // The same node may have held a card before (a tile is reused across files), and
+    // prepareTarget leaves flex behind on it — lottie wants a plain box to size its svg in.
+    opts.node.style.removeProperty('display');
+    opts.node.style.removeProperty('align-items');
+    const animation = loadAnimation({
+        container: opts.node,
+        animationData: JSON.parse(opts.value),
+        renderer: 'svg',
+        loop: opts.loop ?? true,
+        autoplay: true
+    });
+
+    return {
+        destroy() {
+            animation.destroy();
+        }
+    };
+}
+
+/**
  * Products carry no price until billing answers, and the editor's Products panel starts them at
  * "0" — a preview does the same so `@{annual_plan}` renders a number instead of failing.
  */
