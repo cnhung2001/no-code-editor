@@ -102,6 +102,44 @@ const kind = (key) => {
     return 'other';
 };
 
+// ── Phân loại .json: card DivKit hay animation Lottie ─────────────────────
+// Tên file không nói gì (anim_gift.json và iap_intro.json cùng đuôi), mà client
+// cần biết TRƯỚC khi vẽ lưới — Lottie là asset, card là layout, hai chỗ khác
+// nhau. Nên đọc 512 byte đầu: cả hai định dạng đều khai thứ nhận dạng ở ngay
+// đầu file (DivKit: screen_id/remote_layout/templates/card; Lottie: v, fr, ip).
+const JSON_PEEK_BYTES = 512;
+const DIVKIT_MARK = /"(remote_layout|templates|screen_id|card)"\s*:/;
+const LOTTIE_MARK = /"fr"\s*:\s*[\d.]/;
+
+// Cache theo ETag: điều hướng qua lại một project không phải peek lại, và ETag
+// đổi thì entry cũ tự hết hiệu lực.
+const jsonKindCache = new Map();
+
+/**
+ * Trả về { type, version, status } cho một object .json trong 1 request.
+ * Ranged GET mang theo cả Metadata nên không cần HeadObject riêng.
+ */
+async function peekJson(key) {
+    const out = await s3.send(new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Range: `bytes=0-${JSON_PEEK_BYTES - 1}`
+    }));
+    const meta = { version: out.Metadata?.version, status: out.Metadata?.status };
+    const etag = out.ETag;
+    const cached = etag && jsonKindCache.get(key);
+    if (cached && cached.etag === etag) {
+        return { type: cached.type, ...meta };
+    }
+
+    const head = await streamToString(out.Body);
+    // DivKit trước: một file lạ thì mặc định là layout — client verify lại bằng
+    // detectJsonKind khi render, nên đoán sai chỉ tốn một lần đổi tỉ lệ tile.
+    const type = DIVKIT_MARK.test(head) ? 'json' : (LOTTIE_MARK.test(head) ? 'lottie' : 'json');
+    if (etag) jsonKindCache.set(key, { etag, type });
+    return { type, ...meta };
+}
+
 async function streamToString(stream) {
     const chunks = [];
     for await (const c of stream) chunks.push(c);
@@ -146,16 +184,23 @@ app.get('/api/list', async (req, res) => {
                     Prefix: prefix,
                     ContinuationToken: token
                 }));
-                for (const o of page.Contents || []) {
-                    if (o.Key === prefix || o.Key.endsWith('/')) continue; // marker folder
-                    files.push({
+                const entries = (page.Contents || [])
+                    .filter((o) => o.Key !== prefix && !o.Key.endsWith('/')); // bỏ marker folder
+                files.push(...await Promise.all(entries.map(async (o) => {
+                    let type = kind(o.Key);
+                    if (type === 'json') {
+                        try {
+                            ({ type } = await peekJson(o.Key));
+                        } catch { /* ignore */ }
+                    }
+                    return {
                         name: o.Key.replace(prefix, ''),
-                        type: kind(o.Key),
+                        type,
                         key: o.Key,
                         size: o.Size,
                         modified: o.LastModified?.toISOString()
-                    });
-                }
+                    };
+                })));
                 token = page.IsTruncated ? page.NextContinuationToken : undefined;
             } while (token);
             return res.json(files);
@@ -172,14 +217,12 @@ app.get('/api/list', async (req, res) => {
                 .filter((o) => o.Key !== prefix) // bỏ marker folder
                 .map(async (o) => {
                     const name = o.Key.replace(prefix, '');
-                    const t = kind(o.Key);
+                    let t = kind(o.Key);
                     let version, status;
                     if (t === 'json') {
                         try {
-                            const head = await s3.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: o.Key }));
-                            version = head.Metadata?.version;
-                            status = head.Metadata?.status;
-                        } catch { /* ignore */ }
+                            ({ type: t, version, status } = await peekJson(o.Key));
+                        } catch { /* ignore — giữ 'json' */ }
                     }
                     return {
                         name,

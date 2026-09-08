@@ -223,20 +223,23 @@ function filterByName(items: S3Item[], q: string): S3Item[] {
     return items.filter((it) => it.name.toLowerCase().includes(needle));
 }
 
-// Asset = ảnh + file media/khác (mp4…). JSON layout, config, html, folder giữ nguyên.
+// Asset = ảnh, media (mp4…) và animation Lottie. Lottie là .json nhưng không
+// phải layout: nó là nguyên liệu của layout, nên thuộc Assets.
+// Card DivKit, config, html, folder giữ nguyên trong lưới.
 function isAsset(it: S3Item): boolean {
-    return it.type === 'image' || it.type === 'other';
+    return it.type === 'image' || it.type === 'other' || it.type === 'lottie';
 }
 
 // config.json không phải card DivKit nên không dựng được preview.
 function hasPreview(it: S3Item): boolean {
-    return it.type === 'json' && !it.config && Boolean(it.key);
+    return (it.type === 'json' || it.type === 'lottie') && !it.config && Boolean(it.key);
 }
 
 function thumbIcon(type: S3Item['type']) {
     if (type === 'folder') return Icon.folder;
     if (type === 'image') return Icon.image;
     if (type === 'html') return Icon.html;
+    if (type === 'lottie' || type === 'other') return Icon.media;
     return Icon.json;
 }
 
@@ -250,6 +253,9 @@ function thumbIcon(type: S3Item['type']) {
  */
 function thumbShape(it: S3Item, kinds: Record<string, JsonKind>): string {
     if (!hasPreview(it) || !it.key) return '';
+    if (it.type === 'lottie') return ' anim';
+    // Server đoán theo 512 byte đầu; kinds[] là kết quả đọc trọn file lúc
+    // render, nên nó thắng khi hai bên lệch nhau.
     const kind = kinds[it.key];
     if (kind === 'lottie' || kind === 'unknown') return ' anim';
     return ' live';

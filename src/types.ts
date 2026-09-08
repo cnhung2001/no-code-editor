@@ -1,6 +1,7 @@
 // ── Kiểu dữ liệu dùng chung toàn app ──────────────────────────────────────
 
-export type FileKind = 'folder' | 'json' | 'image' | 'html' | 'other';
+// 'lottie' = .json chứa animation Lottie, do server nhận ra bằng nội dung.
+export type FileKind = 'folder' | 'json' | 'lottie' | 'image' | 'html' | 'other';
 export type LayoutStatus = 'live' | 'draft' | 'archived';
 
 // Một mục trong trình duyệt S3 (file hoặc folder)
