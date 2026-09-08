@@ -8,7 +8,7 @@ import type { JsonKind } from '@divkitframework/visual-editor';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
 import { JsonThumb } from './JsonThumb';
-import { AssetMedia, AssetsMosaic, isPreviewableAsset } from './AssetPreview';
+import { AssetMedia, isPreviewableAsset } from './AssetPreview';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
     const map: Record<string, [string, string]> = {
@@ -91,10 +91,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     const grouped = inProject && !searching;
     const assetsView = grouped && assetsOpen;
     const visible = assetsView ? filterByName(projectAssets, q) : (grouped ? nonAssets : filtered);
-    // Card Assets chỉ ở gốc project: sâu hơn thì nó lặp lại đúng một danh sách,
-    // và nút trên thanh search đã luôn ở đó.
-    const showAssetCard = grouped && !assetsOpen && path.length === 1 && projectAssets.length > 0;
-    const shownCount = visible.length + (showAssetCard ? 1 : 0);
+    const shownCount = visible.length;
 
     function closeAssets() {
         setAssetsOpen(false);
@@ -171,22 +168,6 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 
             <div className="cards">
                 {loading && visible.length === 0 && <SkeletonCards n={8} />}
-                {showAssetCard && (
-                    <div className="card-wrap">
-                        <button className="card" onClick={() => setAssetsOpen(true)}>
-                            <div className={'card-thumb ' + (projectAssets.some(isPreviewableAsset) ? 'assets' : 'folder')}>
-                                <AssetsMosaic items={projectAssets} />
-                            </div>
-                            <div className="card-body">
-                                <div className="card-name">
-                                    <span className="card-ic">{Icon.image}</span>
-                                    Assets
-                                </div>
-                                <div className="card-sub">{projectAssets.length} ảnh/video</div>
-                            </div>
-                        </button>
-                    </div>
-                )}
                 {visible.map((it) => (
                     <div key={it.name} className="card-wrap">
                         <button className="card" onClick={() => onOpen(it)}>

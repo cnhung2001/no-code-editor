@@ -1,15 +1,11 @@
-// ── Preview cho asset: ảnh, frame đầu của video, và mosaic cho folder ─────
+// ── Preview cho asset: ảnh và frame đầu của video ─────────────────────────
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { Icon } from '../lib/icons';
 import { s3 } from '../s3';
 import type { S3Item } from '../types';
 
 /** Video <video> phát được trực tiếp. .m3u8 cần hls.js nên không tính. */
 const VIDEO_RE = /\.(mp4|m4v|mov|webm|ogv)$/i;
-/** Số ô tối đa của mosaic — 2x2 là vừa với tile mà vẫn nói được bên trong có gì. */
-const MOSAIC_CELLS = 4;
-
 export function isVideoAsset(item: S3Item): boolean {
     return item.type === 'other' && VIDEO_RE.test(item.name);
 }
@@ -62,26 +58,4 @@ export function AssetMedia({ item, fallback }: { item: S3Item; fallback: ReactNo
         );
     }
     return <img src={url} alt={item.name} />;
-}
-
-/**
- * Mosaic cho card "Assets": tối đa 4 asset đầu tiên thay cho một ô folder
- * trống trơn, để biết bên trong là gì mà không phải mở ra.
- */
-export function AssetsMosaic({ items }: { items: S3Item[] }) {
-    const cells = items.filter(isPreviewableAsset).slice(0, MOSAIC_CELLS);
-
-    if (!cells.length) {
-        return <span className="thumb-big">{Icon.folder}</span>;
-    }
-
-    return (
-        <div className={`thumb-mosaic thumb-mosaic_${Math.min(cells.length, 2)}`}>
-            {cells.map((cell) => (
-                <div key={cell.key} className="thumb-mosaic-cell">
-                    <AssetMedia item={cell} fallback={Icon.image} />
-                </div>
-            ))}
-        </div>
-    );
 }
