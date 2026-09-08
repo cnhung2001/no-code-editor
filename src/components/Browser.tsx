@@ -88,7 +88,10 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         };
     }, [project]);
 
-    const projectAssets = useMemo(() => projectFiles.filter(isAsset), [projectFiles]);
+    const projectAssets = useMemo(
+        () => collapseHlsStreams(projectFiles.filter(isAsset)),
+        [projectFiles]
+    );
     const assetFolders = useMemo(
         () => assetOnlyFolders(projectFiles, prefix),
         [projectFiles, prefix]
@@ -168,7 +171,10 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                             )}
                         </div>
                     </button>
-                    {it.type !== 'folder' && it.key && perms.delete && (
+                    {/* Không có nút xoá cho stream HLS: nó là hàng chục object, mà
+                        nút này xoá đúng một key — bấm xong sẽ còn lại một folder
+                        segment mồ côi không ai thấy. */}
+                    {it.type !== 'folder' && it.type !== 'hls' && it.key && perms.delete && (
                         <button
                             className="card-del"
                             title="Xoá file khỏi S3"
@@ -282,6 +288,63 @@ function assetOnlyFolders(files: S3Item[], prefix: string): Set<string> {
 }
 
 /**
+ * Gộp mỗi stream HLS thành MỘT mục.
+ *
+ * Một stream là cả một folder — master.m3u8, playlist từng rendition, rồi hàng
+ * chục segment .ts — nhưng nó là một video. Trải phẳng ra thì 29 mục rác đè
+ * chết mọi asset khác trong danh sách.
+ *
+ * Gốc của stream là folder chứa .m3u8 NÔNG NHẤT: các rendition
+ * (stream_360p/index.m3u8) nằm dưới nó nên tự động bị gộp vào.
+ */
+function collapseHlsStreams(assets: S3Item[]): S3Item[] {
+    const playlistFolders = assets
+        .filter((it) => it.name.endsWith('.m3u8'))
+        .map((it) => it.name.replace(/\/[^/]+$/, ''))
+        .filter((folder, i, all) => all.indexOf(folder) === i)
+        .sort((a, b) => a.length - b.length);
+    if (!playlistFolders.length) return assets;
+
+    const roots: string[] = [];
+    for (const folder of playlistFolders) {
+        if (!roots.some((root) => folder === root || folder.startsWith(`${root}/`))) {
+            roots.push(folder);
+        }
+    }
+
+    const streams = new Map<string, S3Item>(
+        roots.map((root) => [root, { name: root, type: 'hls' as const, size: 0 }])
+    );
+    const rest: S3Item[] = [];
+
+    for (const item of assets) {
+        const root = roots.find((r) => item.name.startsWith(`${r}/`));
+        if (!root) {
+            rest.push(item);
+            continue;
+        }
+        const stream = streams.get(root)!;
+        stream.size = (stream.size || 0) + (item.size || 0);
+        if (!stream.modified || (item.modified && item.modified > stream.modified)) {
+            stream.modified = item.modified;
+        }
+        // Playlist gốc là chỗ vào của stream — giữ key đó để copy/mở được.
+        if (!stream.key && item.name === `${root}/master.m3u8`) {
+            stream.key = item.key;
+        }
+    }
+    // Không có master.m3u8 thì lấy playlist nông nhất làm chỗ vào.
+    for (const [root, stream] of streams) {
+        if (stream.key) continue;
+        stream.key = assets.find(
+            (it) => it.name.startsWith(`${root}/`) && it.name.endsWith('.m3u8')
+        )?.key;
+    }
+
+    return [...rest, ...streams.values()];
+}
+
+/**
  * Assets chia theo loại. Một project có thể có tám mươi mấy file trộn lẫn,
  * mà tìm một cái ảnh và tìm một cái animation là hai việc khác nhau.
  *
@@ -325,7 +388,7 @@ function thumbIcon(type: S3Item['type']) {
     if (type === 'folder') return Icon.folder;
     if (type === 'image') return Icon.image;
     if (type === 'html') return Icon.html;
-    if (type === 'lottie' || type === 'other') return Icon.media;
+    if (type === 'lottie' || type === 'other' || type === 'hls') return Icon.media;
     return Icon.json;
 }
 

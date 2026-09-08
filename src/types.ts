@@ -1,7 +1,9 @@
 // ── Kiểu dữ liệu dùng chung toàn app ──────────────────────────────────────
 
 // 'lottie' = .json chứa animation Lottie, do server nhận ra bằng nội dung.
-export type FileKind = 'folder' | 'json' | 'lottie' | 'image' | 'html' | 'other';
+// 'hls'    = một stream HLS (folder .m3u8 + .ts) gộp thành một mục; client tự
+//            dựng khi liệt kê asset, server không bao giờ trả về loại này.
+export type FileKind = 'folder' | 'json' | 'lottie' | 'image' | 'html' | 'other' | 'hls';
 export type LayoutStatus = 'live' | 'draft' | 'archived';
 
 // Một mục trong trình duyệt S3 (file hoặc folder)

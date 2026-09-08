@@ -4,15 +4,22 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { s3 } from '../s3';
 import type { S3Item } from '../types';
 
-/** Video <video> phát được trực tiếp. .m3u8 cần hls.js nên không tính. */
-const VIDEO_RE = /\.(mp4|m4v|mov|webm|ogv)$/i;
+/** Video mà <video src> phát được trực tiếp. */
+const PLAYABLE_VIDEO_RE = /\.(mp4|m4v|mov|webm|ogv)$/i;
+/** HLS là video, chỉ là được đóng gói thành playlist + segment. */
 export function isVideoAsset(item: S3Item): boolean {
-    return item.type === 'other' && VIDEO_RE.test(item.name);
+    return item.type === 'hls' ||
+        (item.type === 'other' && PLAYABLE_VIDEO_RE.test(item.name));
 }
 
-/** Asset dựng được preview; phần còn lại (.m3u8, .zip…) chỉ có icon. */
+/**
+ * Asset dựng được preview. Tách khỏi [isVideoAsset] vì hai câu hỏi khác nhau:
+ * HLS *là* video, nhưng một <video src> trần không decode được nên không có
+ * frame để lấy — nó nhận icon như .zip.
+ */
 export function isPreviewableAsset(item: S3Item): boolean {
-    return Boolean(item.key) && (item.type === 'image' || isVideoAsset(item));
+    return Boolean(item.key) &&
+        (item.type === 'image' || (item.type === 'other' && PLAYABLE_VIDEO_RE.test(item.name)));
 }
 
 function useAssetUrl(item: S3Item): string | null {
@@ -45,7 +52,7 @@ export function AssetMedia({ item, fallback }: { item: S3Item; fallback: ReactNo
     if (!url) {
         return <span className="thumb-big">{fallback}</span>;
     }
-    if (isVideoAsset(item)) {
+    if (PLAYABLE_VIDEO_RE.test(item.name)) {
         return (
             <video
                 src={`${url}#t=0.1`}
