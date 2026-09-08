@@ -70,6 +70,7 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
     }
 
     muteVideos(json);
+    prepareTarget(opts.node);
 
     const customComponents = new Map<string, CustomComponentDescription>();
     collectCustomComponents(json, customComponents);
@@ -96,6 +97,21 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
             instance.$destroy();
         }
     };
+}
+
+/**
+ * A card's root resolves `height: match_parent` by stretching as a flex item, so the target has
+ * to be a flex container — this is what the editor's own preview does from CSS
+ * (`.renderer__content-inner`), and it is not optional.
+ *
+ * A plain block target leaves the root at content height, and every `match_parent` inside it
+ * collapses with it: the card renders as a strip of `wrap_content` items at the top with white
+ * space below, which reads as a broken layout rather than a wrong container. The matching
+ * `width: 100%` on the root goes with it — stretch only settles the cross axis.
+ */
+function prepareTarget(node: HTMLElement): void {
+    node.style.display = 'flex';
+    node.style.alignItems = 'stretch';
 }
 
 /**

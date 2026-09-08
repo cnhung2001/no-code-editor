@@ -101,6 +101,10 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .thumb-live { position: absolute; inset: 0; overflow: hidden; background: #fff; display: grid; place-items: center; }
 /* Vị trí và scale do JS tính (xem fitInside), CSS chỉ chốt điểm gốc. */
 .thumb-live-stage { position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: none; }
+/* Cùng luật với .renderer__content-inner trong editor: root của card là flex
+   item nên stretch lo chiều cao, còn chiều ngang phải nói rõ. Thiếu dòng này
+   thì card co về bề rộng nội dung. */
+.thumb-live-stage > * { width: 100%; }
 .thumb-big { transform: scale(1.9); opacity: .85; color: #fff; }
 .card-thumb.folder .thumb-big { color: var(--green-2); }
 .card-body { padding: 11px 13px; display: flex; flex-direction: column; gap: 5px; }
