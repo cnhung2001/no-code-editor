@@ -46,6 +46,19 @@ declare module '@divkitframework/visual-editor' {
     export const DivProEditor: {
         init(opts: DivProEditorOptions): DivProEditorInstance;
     };
+
+    export interface CardPreviewOptions {
+        node: HTMLElement;
+        value: string;
+        theme?: 'light' | 'dark';
+        languageCode?: string;
+        direction?: 'ltr' | 'rtl';
+        onError?(error: Error): void;
+    }
+    export interface CardPreviewInstance {
+        destroy(): void;
+    }
+    export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance;
 }
 
 declare module '@divkitframework/visual-editor/dist/divkit-editor.css';
