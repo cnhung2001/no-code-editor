@@ -8,7 +8,7 @@ import type { JsonKind } from '@divkitframework/visual-editor';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
 import { JsonThumb } from './JsonThumb';
-import { AssetMedia, isPreviewableAsset } from './AssetPreview';
+import { AssetMedia, isPreviewableAsset, isVideoAsset } from './AssetPreview';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
     const map: Record<string, [string, string]> = {
@@ -139,6 +139,52 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         }
     }
 
+    // Một card, dùng cho cả lưới layout và các nhóm trong view assets.
+    function renderCard(it: S3Item) {
+        return (
+                <div key={it.name} className="card-wrap">
+                    <button className="card" onClick={() => onOpen(it)}>
+                        <div className={'card-thumb ' + it.type + thumbShape(it, kinds)}>
+                            <CardThumb item={it} project={path[0] || ''} onKind={noteKind} />
+                        </div>
+                        <div className="card-body">
+                            <div className="card-name">
+                                <span className="card-ic">{thumbIcon(it.type)}</span>
+                                {it.name}
+                            </div>
+                            <div className="card-sub">
+                                {it.type === 'folder'
+                                    ? 'Folder'
+                                    : `${fmtSize(it.size)} · ${fmtDate(it.modified)}`}
+                            </div>
+                            {/* Chỉ layout được push qua tool mới có metadata này; một
+                                animation Lottie hay ảnh thì không, nên đừng dán nhãn
+                                "Draft" cho thứ vốn không có vòng đời draft/live. */}
+                            {(it.status || it.version) && (
+                                <div className="card-foot">
+                                    {it.status && <StatusBadge status={it.status} />}
+                                    {it.version && <span className="ver">{it.version}</span>}
+                                </div>
+                            )}
+                        </div>
+                    </button>
+                    {it.type !== 'folder' && it.key && perms.delete && (
+                        <button
+                            className="card-del"
+                            title="Xoá file khỏi S3"
+                            disabled={deleting === it.key}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(it);
+                            }}
+                        >
+                            {Icon.trash}
+                        </button>
+                    )}
+                </div>
+        );
+    }
+
     return (
         <main className="browser">
             <header className="b-head">
@@ -189,50 +235,18 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                 {err && <span className="b-err"> · Lỗi: {err}</span>}
             </div>
 
-            <div className="cards">
-                {gridLoading && <SkeletonCards n={8} />}
-                {!gridLoading && visible.map((it) => (
-                    <div key={it.name} className="card-wrap">
-                        <button className="card" onClick={() => onOpen(it)}>
-                            <div className={'card-thumb ' + it.type + thumbShape(it, kinds)}>
-                                <CardThumb item={it} project={path[0] || ''} onKind={noteKind} />
-                            </div>
-                            <div className="card-body">
-                                <div className="card-name">
-                                    <span className="card-ic">{thumbIcon(it.type)}</span>
-                                    {it.name}
-                                </div>
-                                <div className="card-sub">
-                                    {it.type === 'folder'
-                                        ? 'Folder'
-                                        : `${fmtSize(it.size)} · ${fmtDate(it.modified)}`}
-                                </div>
-                                {/* Chỉ layout được push qua tool mới có metadata này; một
-                                    animation Lottie hay ảnh thì không, nên đừng dán nhãn
-                                    "Draft" cho thứ vốn không có vòng đời draft/live. */}
-                                {(it.status || it.version) && (
-                                    <div className="card-foot">
-                                        {it.status && <StatusBadge status={it.status} />}
-                                        {it.version && <span className="ver">{it.version}</span>}
-                                    </div>
-                                )}
-                            </div>
-                        </button>
-                        {it.type !== 'folder' && it.key && perms.delete && (
-                            <button
-                                className="card-del"
-                                title="Xoá file khỏi S3"
-                                disabled={deleting === it.key}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(it);
-                                }}
-                            >
-                                {Icon.trash}
-                            </button>
-                        )}
-                    </div>
+            <div className="cards-scroll">
+                {gridLoading && <div className="cards"><SkeletonCards n={8} /></div>}
+                {!gridLoading && assetsView && groupAssets(visible).map((group) => (
+                    <section key={group.key} className="asset-group">
+                        <h3 className="asset-group-head">
+                            {group.label}
+                            <span className="asset-group-count">{group.items.length}</span>
+                        </h3>
+                        <div className="cards">{group.items.map(renderCard)}</div>
+                    </section>
                 ))}
+                {!gridLoading && !assetsView && <div className="cards">{visible.map(renderCard)}</div>}
             </div>
         </main>
     );
@@ -265,6 +279,28 @@ function assetOnlyFolders(files: S3Item[], prefix: string): Set<string> {
         folders.delete(folder);
     }
     return folders;
+}
+
+/**
+ * Assets chia theo loại. Một project có thể có tám mươi mấy file trộn lẫn,
+ * mà tìm một cái ảnh và tìm một cái animation là hai việc khác nhau.
+ *
+ * "Khác" phải có để không file nào biến mất: .m3u8, .zip… đều rơi vào đây.
+ */
+const ASSET_GROUPS: { key: string; label: string; match(it: S3Item): boolean }[] = [
+    { key: 'image', label: 'Ảnh', match: (it) => it.type === 'image' },
+    { key: 'video', label: 'Video', match: isVideoAsset },
+    { key: 'lottie', label: 'Animation', match: (it) => it.type === 'lottie' },
+    { key: 'other', label: 'Khác', match: () => true }
+];
+
+function groupAssets(items: S3Item[]) {
+    const groups = ASSET_GROUPS.map((g) => ({ ...g, items: [] as S3Item[] }));
+    for (const item of items) {
+        // Nhóm đầu tiên khớp thắng, nên 'other' ở cuối là chỗ hứng phần còn lại.
+        groups.find((g) => g.match(item))?.items.push(item);
+    }
+    return groups.filter((g) => g.items.length > 0);
 }
 
 function filterByName(items: S3Item[], q: string): S3Item[] {
