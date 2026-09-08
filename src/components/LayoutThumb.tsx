@@ -79,8 +79,9 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
     const [failed, setFailed] = useState(false);
     const [scale, setScale] = useState(0);
 
-    // Tile hẹp hơn 375dp nên luôn phải thu nhỏ; scale theo bề rộng để tile
-    // được lấp kín, phần dưới của màn bị crop như một ảnh chụp screen.
+    // Fit trọn màn vào tile: lấy chiều bị bó hẹp hơn, nên không có gì bị crop.
+    // Tile mang đúng tỉ lệ 375x812 (xem .card-thumb.live) nên hai chiều ra cùng
+    // một số; min() là để một tile lệch tỉ lệ vẫn không tràn.
     useEffect(() => {
         const box = boxRef.current;
         if (!box) return;
@@ -88,7 +89,10 @@ export function LayoutThumb({ itemKey, project, fallback }: Props) {
         // click hay tab-focus — pointer-events lo phần chuột, inert lo phần
         // bàn phím và a11y tree.
         stageRef.current?.setAttribute('inert', '');
-        const observer = new ResizeObserver(() => setScale(box.clientWidth / PREVIEW_WIDTH));
+        const observer = new ResizeObserver(() => setScale(Math.min(
+            box.clientWidth / PREVIEW_WIDTH,
+            box.clientHeight / PREVIEW_HEIGHT
+        )));
         observer.observe(box);
         return () => observer.disconnect();
     }, []);

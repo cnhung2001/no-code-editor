@@ -69,6 +69,8 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
         }
     }
 
+    muteVideos(json);
+
     const customComponents = new Map<string, CustomComponentDescription>();
     collectCustomComponents(json, customComponents);
 
@@ -86,11 +88,71 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
         }
     });
 
+    const silence = keepSilent(opts.node);
+
     return {
         destroy() {
+            silence();
             instance.$destroy();
         }
     };
+}
+
+/**
+ * Forces every video div silent.
+ *
+ * A preview is something you look at, often several at once, so it must never make noise —
+ * `muted` is not the card author's decision here. The web runtime reads `json.muted`, and a
+ * template may bind that prop to a parameter, so the binding goes too or it would win.
+ */
+function muteVideos(node: unknown): void {
+    if (Array.isArray(node)) {
+        node.forEach(muteVideos);
+        return;
+    }
+    if (!node || typeof node !== 'object') {
+        return;
+    }
+
+    const obj = node as Record<string, unknown>;
+    if (obj.type === 'video') {
+        delete obj.$muted;
+        obj.muted = true;
+    }
+    for (const key in obj) {
+        muteVideos(obj[key]);
+    }
+}
+
+/**
+ * Belt to the `muteVideos` braces: mutes media elements as they appear.
+ *
+ * Whatever the json says, a `<video>` that reaches the DOM unmuted is audible — and elements
+ * arrive late (a source resolving, a state swapping, a custom div building its own player), long
+ * after the render call returns. Returns the teardown.
+ */
+function keepSilent(node: HTMLElement): () => void {
+    const mute = (root: ParentNode) => {
+        root.querySelectorAll('video, audio').forEach(element => {
+            (element as HTMLMediaElement).muted = true;
+        });
+    };
+
+    mute(node);
+    const observer = new MutationObserver(records => {
+        for (const record of records) {
+            record.addedNodes.forEach(added => {
+                if (added instanceof HTMLMediaElement) {
+                    added.muted = true;
+                } else if (added instanceof Element) {
+                    mute(added);
+                }
+            });
+        }
+    });
+    observer.observe(node, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
 }
 
 function localPalette(json: DivJson): object {

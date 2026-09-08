@@ -91,14 +91,15 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .card-thumb { height: 132px; display: grid; place-items: center; background: #0b0c10; overflow: hidden; }
 .card-thumb.folder { background: var(--green-bg); }
 .card-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.card-thumb.live { display: block; height: 200px; background: #fff; }
+/* Tile mang đúng tỉ lệ màn hình đang render, nhờ đó fit trọn layout mà không
+   để lại dải trống hai bên. */
+.card-thumb.live { display: block; flex: none; height: auto; aspect-ratio: 375 / 812; background: #fff; }
 /* Icon chờ/thất bại: nền tile là trắng nên màu trắng mặc định sẽ vô hình. */
 .card-thumb.live .thumb-big { color: #c6c9c3; }
-/* Tile rộng ~190px còn màn hình 375x812 → scale theo bề rộng và crop phần
-   dưới, như một ảnh chụp screen; gradient dưới nói rõ là bị crop. */
 .thumb-live { position: relative; width: 100%; height: 100%; overflow: hidden; background: #fff; display: grid; place-items: center; }
-.thumb-live-stage { position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: none; }
-.thumb-live::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(transparent, rgba(255, 255, 255, .9)); pointer-events: none; }
+/* inset + margin:auto căn giữa khung 375x812 trước khi scale, nên tile nào
+   lệch tỉ lệ cũng chỉ thừa đều hai phía chứ không lệch về một bên. */
+.thumb-live-stage { position: absolute; inset: 0; margin: auto; pointer-events: none; }
 .thumb-big { transform: scale(1.9); opacity: .85; color: #fff; }
 .card-thumb.folder .thumb-big { color: var(--green-2); }
 .card-body { padding: 11px 13px; display: flex; flex-direction: column; gap: 5px; }
