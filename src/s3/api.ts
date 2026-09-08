@@ -28,8 +28,9 @@ export const apiAdapter: S3Adapter = {
         return j<ProjectInfo[]>(await fetch(`${BASE}/projects`));
     },
 
-    async listPath(prefix: string) {
+    async listPath(prefix: string, opts?: { recursive?: boolean }) {
         const q = new URLSearchParams({ prefix });
+        if (opts?.recursive) q.set('recursive', '1');
         return j<S3Item[]>(await fetch(`${BASE}/list?${q}`));
     },
 

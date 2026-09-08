@@ -38,7 +38,8 @@ export interface PublishOptions {
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)
 export interface S3Adapter {
     listProjects(): Promise<ProjectInfo[]>;
-    listPath(prefix: string): Promise<S3Item[]>;
+    /** recursive: mọi file dưới prefix, không gồm folder (dùng cho asset cả project). */
+    listPath(prefix: string, opts?: { recursive?: boolean }): Promise<S3Item[]>;
     getObjectText(key: string): Promise<string>;
     getAssetUrl(key: string): Promise<string>;
     putObject(key: string, body: string, status?: LayoutStatus, meta?: LayoutMeta): Promise<void>;

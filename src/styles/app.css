@@ -56,6 +56,10 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 .btn.primary:hover { background: #000; }
 .btn.ghost:hover { background: #f4f5f3; }
+/* Nút Assets khi view assets đang mở — trạng thái bật, khác ghost thường. */
+.btn.ghost.active { background: var(--green-bg); border-color: var(--green); color: var(--green-2); }
+.btn-count { padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, .08); font-size: 11px; font-weight: 700; }
+.btn.ghost.active .btn-count { background: rgba(12, 138, 62, .16); }
 .btn:disabled { opacity: .5; cursor: default; }
 .icon-btn { background: none; border: 0; cursor: pointer; color: var(--ink-3); display: grid; place-items: center; padding: 4px; border-radius: 7px; }
 .icon-btn:hover { background: #f0f1ef; color: var(--ink); }

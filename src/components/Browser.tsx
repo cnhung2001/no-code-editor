@@ -39,8 +39,11 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     const [err, setErr] = useState<string | null>(null);
     const [q, setQ] = useState('');
     const [deleting, setDeleting] = useState<string | null>(null);
-    // Gom ảnh/video vào 1 "folder" Assets ảo (chỉ hiển thị, không đổi S3).
+    // Assets của CẢ project, không riêng prefix đang mở: ảnh/video hay nằm rải
+    // trong subfolder (images/, videos/), nên gom theo từng thư mục thì mỗi chỗ
+    // thấy một phần. Mở bằng nút trên thanh search.
     const [assetsOpen, setAssetsOpen] = useState(false);
+    const [projectAssets, setProjectAssets] = useState<S3Item[]>([]);
     // Loại của từng .json, do JsonThumb báo lên sau khi tải nội dung: tên file
     // không phân biệt được card DivKit với animation Lottie.
     const [kinds, setKinds] = useState<Record<string, JsonKind>>({});
@@ -63,19 +66,34 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         };
     }, [prefix]);
 
-    const filtered = useMemo(
-        () => items.filter((it) => it.name.toLowerCase().includes(q.toLowerCase())),
-        [items, q]
-    );
+    const project = path[0] || '';
+
+    useEffect(() => {
+        let alive = true;
+        setProjectAssets([]);
+        if (!project) return;
+        s3.listPath(`${project}/`, { recursive: true })
+            .then((res) => alive && setProjectAssets(res.filter(isAsset)))
+            .catch(() => {
+                /* asset chỉ là phần phụ của lưới — lỗi ở đây không nên chặn view */
+            });
+        return () => {
+            alive = false;
+        };
+    }, [project]);
+
+    const filtered = useMemo(() => filterByName(items, q), [items, q]);
 
     const inProject = path.length >= 1;
     const searching = q.trim().length > 0;
-    const assets = useMemo(() => filtered.filter(isAsset), [filtered]);
     const nonAssets = useMemo(() => filtered.filter((it) => !isAsset(it)), [filtered]);
     // Chỉ gom khi đang trong project và không tìm kiếm (tìm kiếm → phẳng để tìm cả asset).
     const grouped = inProject && !searching;
-    const visible = grouped ? (assetsOpen ? assets : nonAssets) : filtered;
-    const showAssetCard = grouped && !assetsOpen && assets.length > 0;
+    const assetsView = grouped && assetsOpen;
+    const visible = assetsView ? filterByName(projectAssets, q) : (grouped ? nonAssets : filtered);
+    // Card Assets chỉ ở gốc project: sâu hơn thì nó lặp lại đúng một danh sách,
+    // và nút trên thanh search đã luôn ở đó.
+    const showAssetCard = grouped && !assetsOpen && path.length === 1 && projectAssets.length > 0;
     const shownCount = visible.length + (showAssetCard ? 1 : 0);
 
     function closeAssets() {
@@ -93,6 +111,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         try {
             await s3.deleteObject(it.key);
             setItems((prev) => prev.filter((x) => x.key !== it.key));
+            setProjectAssets((prev) => prev.filter((x) => x.key !== it.key));
         } catch (e) {
             setErr(String((e as Error).message || e));
         } finally {
@@ -105,13 +124,15 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
             <header className="b-head">
                 <div className="crumbs">
                     <button className="crumb" onClick={() => { closeAssets(); onCrumb(-1); }}>{BUCKET_LABEL}</button>
-                    {path.map((seg, i) => (
+                    {/* Assets là của cả project, nên khi mở view đó breadcrumb dừng ở
+                        tên project — kéo theo folder đang mở sẽ nói sai phạm vi. */}
+                    {(assetsView ? path.slice(0, 1) : path).map((seg, i) => (
                         <span key={i} className="crumb-wrap">
                             <span className="crumb-sep">{Icon.chevron}</span>
                             <button className="crumb" onClick={() => { closeAssets(); onCrumb(i); }}>{seg}</button>
                         </span>
                     ))}
-                    {grouped && assetsOpen && (
+                    {assetsView && (
                         <span className="crumb-wrap">
                             <span className="crumb-sep">{Icon.chevron}</span>
                             <button className="crumb" onClick={closeAssets}>Assets</button>
@@ -123,6 +144,18 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                         <span className="search-ic">{Icon.search}</span>
                         <input placeholder="Tìm kiếm…" value={q} onChange={(e) => setQ(e.target.value)} />
                     </div>
+                    {inProject && (
+                        <button
+                            className={'btn ghost sm' + (assetsOpen ? ' active' : '')}
+                            title="Ảnh, video và media của cả project"
+                            onClick={() => setAssetsOpen(!assetsOpen)}
+                        >
+                            {Icon.image} Assets
+                            {projectAssets.length > 0 && (
+                                <span className="btn-count">{projectAssets.length}</span>
+                            )}
+                        </button>
+                    )}
                     {inProject && perms.update && (
                         <button className="btn primary sm" onClick={onNewLayout}>
                             {Icon.plus} New layout
@@ -141,15 +174,15 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                 {showAssetCard && (
                     <div className="card-wrap">
                         <button className="card" onClick={() => setAssetsOpen(true)}>
-                            <div className={'card-thumb ' + (assets.some(isPreviewableAsset) ? 'assets' : 'folder')}>
-                                <AssetsMosaic items={assets} />
+                            <div className={'card-thumb ' + (projectAssets.some(isPreviewableAsset) ? 'assets' : 'folder')}>
+                                <AssetsMosaic items={projectAssets} />
                             </div>
                             <div className="card-body">
                                 <div className="card-name">
-                                    <span className="card-ic">{Icon.folder}</span>
+                                    <span className="card-ic">{Icon.image}</span>
                                     Assets
                                 </div>
-                                <div className="card-sub">{assets.length} ảnh/video</div>
+                                <div className="card-sub">{projectAssets.length} ảnh/video</div>
                             </div>
                         </button>
                     </div>
@@ -202,6 +235,12 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 }
 
 const BUCKET_LABEL = 'ik-nocode-paywall';
+
+function filterByName(items: S3Item[], q: string): S3Item[] {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((it) => it.name.toLowerCase().includes(needle));
+}
 
 // Asset = ảnh + file media/khác (mp4…). JSON layout, config, html, folder giữ nguyên.
 function isAsset(it: S3Item): boolean {

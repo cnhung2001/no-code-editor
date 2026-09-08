@@ -130,9 +130,37 @@ app.get('/api/projects', async (_req, res) => {
 });
 
 // ── List nội dung 1 prefix (folder + file) ─────────────────────────────────
+// recursive=1: bỏ Delimiter để lấy mọi object dưới prefix, không trả folder, và
+// không HeadObject từng file. Dùng cho danh sách asset của cả project — asset
+// nằm rải trong subfolder (images/, videos/), và không có version/status để đọc.
 app.get('/api/list', async (req, res) => {
     const prefix = req.query.prefix || '';
+    const recursive = req.query.recursive === '1';
     try {
+        if (recursive) {
+            const files = [];
+            let token;
+            do {
+                const page = await s3.send(new ListObjectsV2Command({
+                    Bucket: S3_BUCKET,
+                    Prefix: prefix,
+                    ContinuationToken: token
+                }));
+                for (const o of page.Contents || []) {
+                    if (o.Key === prefix || o.Key.endsWith('/')) continue; // marker folder
+                    files.push({
+                        name: o.Key.replace(prefix, ''),
+                        type: kind(o.Key),
+                        key: o.Key,
+                        size: o.Size,
+                        modified: o.LastModified?.toISOString()
+                    });
+                }
+                token = page.IsTruncated ? page.NextContinuationToken : undefined;
+            } while (token);
+            return res.json(files);
+        }
+
         const out = await s3.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, Delimiter: '/' }));
         const folders = (out.CommonPrefixes || []).map((p) => ({
             name: p.Prefix.replace(prefix, '').replace(/\/$/, ''),
