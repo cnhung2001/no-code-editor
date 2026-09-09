@@ -37,6 +37,13 @@ ARG VITE_USE_MOCK=false
 ARG VITE_ASSET_PROXY=false
 ARG VITE_ASSET_PUBLIC_BASE=
 RUN npm run build
+# Fail fast: registry schema (988 KB, chỉ editor cần) KHÔNG được nằm trong chunk
+# khởi động. Nó lọt vào khi có ai import '@divkitframework/visual-editor' (barrel
+# → App.svelte → schema.ts) từ code eager — xem visual-editor/src/preview.ts.
+# Lỗi này không làm build fail và không hỏng gì thấy được, chỉ làm web tải chậm
+# gấp ba, nên phải chặn ở đây chứ không trông vào ai đó soi bundle.
+RUN ! grep -q 'div-container.json' dist/assets/index-*.js \
+    || { echo 'BUILD BROKEN: schema DivKit lọt vào chunk eager — import từ dist/preview.js, đừng import barrel'; exit 1; }
 
 # ── 3. Deps của server (cần token registry @ikameglobal) ─────────────────
 FROM node:22-alpine AS server-deps

@@ -4,7 +4,7 @@ import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
 import { usePerms } from '../auth/AuthContext';
-import type { JsonKind } from '@divkitframework/visual-editor';
+import type { JsonKind } from '@divkitframework/visual-editor/dist/preview.js';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
 import { JsonThumb } from './JsonThumb';

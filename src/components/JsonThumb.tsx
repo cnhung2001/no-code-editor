@@ -8,11 +8,17 @@
 // Nên phải phân loại theo nội dung rồi mới chọn cách render và tỉ lệ tile.
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { detectJsonKind, renderCardPreview, renderLottiePreview } from '@divkitframework/visual-editor';
+// Entry `preview`, KHÔNG phải barrel gốc: barrel kéo cả editor (Svelte,
+// CodeMirror, 185 file schema) vào chunk khởi động, vì component này nằm trong
+// Browser mà Browser thì App import eager — `lazy()` của LayoutPreview/Builder
+// thành vô nghĩa. Chunk eager 1.85 MB → 703 KB (js+css) nhờ đổi mấy dòng này.
+import {
+    detectJsonKind, renderCardPreview, renderLottiePreview
+} from '@divkitframework/visual-editor/dist/preview.js';
 import type {
     CardPreviewInstance, JsonKind, LottiePreviewInstance
-} from '@divkitframework/visual-editor';
-import '@divkitframework/visual-editor/dist/divkit-editor.css';
+} from '@divkitframework/visual-editor/dist/preview.js';
+import '@divkitframework/visual-editor/dist/preview.css';
 import { s3 } from '../s3';
 import { resolveAssets } from '../editor/resolveAssets';
 

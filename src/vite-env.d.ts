@@ -46,7 +46,12 @@ declare module '@divkitframework/visual-editor' {
     export const DivProEditor: {
         init(opts: DivProEditorOptions): DivProEditorInstance;
     };
+}
 
+// Entry `preview` (visual-editor/src/preview.ts): chỉ phần render, không editor.
+// Barrel ở trên KHÔNG khai lại mấy hàm này — khai cả hai chỗ là mời người ta
+// import từ barrel cho "gọn" rồi lôi luôn editor vào chunk khởi động.
+declare module '@divkitframework/visual-editor/dist/preview.js' {
     export interface CardPreviewOptions {
         node: HTMLElement;
         value: string;
@@ -76,3 +81,4 @@ declare module '@divkitframework/visual-editor' {
 }
 
 declare module '@divkitframework/visual-editor/dist/divkit-editor.css';
+declare module '@divkitframework/visual-editor/dist/preview.css';
