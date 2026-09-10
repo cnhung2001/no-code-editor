@@ -1,7 +1,7 @@
 import { render, createVariable, createGlobalVariablesController } from '@divkitframework/divkit/client-devtool';
 import type { CustomComponentDescription } from '@divkitframework/divkit/typings/custom';
 import type {
-    CustomActionCallback, Direction, DivJson, DivVariable, StatCallback
+    CustomActionCallback, Direction, DivJson, DivVariable, StatCallback, WrappedError
 } from '@divkitframework/divkit/typings/common';
 import { collectCustomComponents } from './customComponents';
 import { createDivExtensions } from './divExtensions';
@@ -21,6 +21,14 @@ import { createDivExtensions } from './divExtensions';
  */
 export type PreviewAction = Parameters<CustomActionCallback>[0];
 
+/**
+ * Lỗi/cảnh báo từ engine. KHÔNG phải `Error` thường: `level` phân biệt lỗi với
+ * cảnh báo, và `additional` mới là chỗ chứa nguyên nhân — `message` một mình
+ * thường vô dụng, vd "Video playing error" không nói video nào hay vì sao,
+ * trong khi `additional.originalText` có đúng lý do browser từ chối play.
+ */
+export type PreviewError = WrappedError;
+
 export interface CardPreviewOptions {
     node: HTMLElement;
     /** Wrapper (`{ screen_id, remote_layout, variables }`) or a bare DivKit card. */
@@ -29,7 +37,7 @@ export interface CardPreviewOptions {
     /** Value for the `language_code` variable the SDK injects on device. */
     languageCode?: string;
     direction?: Direction;
-    onError?(error: Error): void;
+    onError?(error: PreviewError): void;
     /**
      * Chỉ những scheme LẠ (`myapp://…`). Đã kiểm: `div-action://purchase` KHÔNG
      * tới đây — DivKit coi `div-action` là protocol có sẵn nên mọi path dưới nó,

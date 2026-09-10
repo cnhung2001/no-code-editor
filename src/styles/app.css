@@ -153,7 +153,7 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
    row `auto` sẽ cao theo khung device (896px), rồi .pv-fit cao 100% của row đó,
    nên phép đo "còn bao nhiêu chỗ" trả về chính chiều cao của thứ cần thu nhỏ →
    scale luôn ra 1 và khung không bao giờ vừa. */
-.pv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: minmax(0, 1fr); }
+.pv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: minmax(0, 1fr); }
 /* Khung device cao hơn modal (896px trên laptop 13") thì THU NHỎ cho vừa, chứ
    không cuộn: cuộn nghĩa là không bao giờ thấy cả màn một lúc, mà nhìn tổng thể
    mới là việc của preview. overflow: hidden để không có scrollbar nào chen vào
@@ -176,6 +176,8 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .pv-stage > * { width: 100%; }
 .pv-error { position: absolute; left: 20px; right: 20px; bottom: 16px; padding: 8px 12px; border-radius: 9px; background: #fdecec; color: #a11; font-size: 12.5px; }
 
+/* 320px chứ không hẹp hơn: dòng lỗi mang cả `url=`, `expression=` và `path=`,
+   cột chật thì mỗi giá trị xuống bốn dòng và không ai đọc nổi. */
 .pv-log { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
 .pv-log-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 12.5px; }
 .pv-log-empty { margin: 0; padding: 14px; color: var(--ink-3); font-size: 12px; line-height: 1.55; }
@@ -184,7 +186,8 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .pv-log-time { color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
 .pv-log-name { font-weight: 600; word-break: break-all; }
 .pv-log-args { grid-column: 2; color: var(--ink-2); font-family: var(--mono); font-size: 11px; word-break: break-all; }
-.pv-log-list li.is-note .pv-log-name { font-weight: 500; color: var(--amber); }
+.pv-log-list li.is-warn .pv-log-name { font-weight: 500; color: var(--amber); }
+.pv-log-list li.is-error .pv-log-name { font-weight: 500; color: #b3261e; }
 .pv-log-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 11px; line-height: 1.5; }
 .pv-log-note code { font-family: var(--mono); background: #f2f3f0; padding: 0 3px; border-radius: 4px; }
 .meta-copy { display: flex; align-items: flex-start; gap: 4px; }

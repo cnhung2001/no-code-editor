@@ -9,7 +9,8 @@
 // log trống nghĩa là nút chưa gắn action, đó chính là loại lỗi màn này để bắt.
 import { useEffect, useRef, useState } from 'react';
 import {
-    renderCardPreview, type CardPreviewInstance, type PreviewAction
+    renderCardPreview,
+    type CardPreviewInstance, type PreviewAction, type PreviewError
 } from '@divkitframework/visual-editor/dist/preview.js';
 import { Icon } from '../../lib/icons';
 import { VIEWPORT_LIST } from '../../editor/editorConfig';
@@ -28,8 +29,52 @@ interface LogEntry {
     name: string;
     params: [string, string][];
     raw?: string;
-    /** Ghi chú của engine (vd action nó không xử lý được), không phải action. */
-    error?: boolean;
+    /** Có thì đây là ghi chú của engine, không phải action. */
+    level?: 'error' | 'warn';
+}
+
+/**
+ * Field trong `additional` KHÔNG đưa vào log.
+ *
+ * Cả ba đều là nguyên cây json của component, lặp lại ba lần trong cùng một
+ * lỗi. Đưa vào thì mỗi dòng dài hàng nghìn ký tự và nhấn chìm đúng những thứ
+ * cần đọc (`message`, `expression`, `url`). `path` đã nói chỗ nào trong card,
+ * còn json thì mở editor ra là thấy.
+ */
+const BULKY = new Set(['json', 'origJson', 'fullpath']);
+
+/** Giá trị trong `additional` có thể là bất cứ gì — rút về một dòng đọc được. */
+function formatValue(v: unknown): string {
+    if (v instanceof Error) return v.message;
+    if (v === null || v === undefined) return String(v);
+    if (typeof v === 'object') {
+        try {
+            const json = JSON.stringify(v);
+            return json.length > 120 ? json.slice(0, 117) + '…' : json;
+        } catch {
+            return String(v);
+        }
+    }
+    const text = String(v);
+    return text.length > 200 ? text.slice(0, 197) + '…' : text;
+}
+
+/**
+ * Ghi chú của engine → dòng log.
+ *
+ * `message` một mình gần như vô dụng: "Video playing error" không nói video
+ * nào hay vì sao. Nguyên nhân nằm trong `additional` — `originalText` cho lý
+ * do browser từ chối play, `url`/`id`/`path` cho biết chỗ nào trong card.
+ */
+function describeError(err: PreviewError): Omit<LogEntry, 'id' | 'at'> {
+    const extra = err.additional || {};
+    return {
+        name: err.message || 'Lỗi không rõ',
+        params: Object.entries(extra)
+            .filter(([k]) => !BULKY.has(k))
+            .map(([k, v]) => [k, formatValue(v)] as [string, string]),
+        level: err.level === 'warn' ? 'warn' : 'error'
+    };
 }
 
 /** `div-action://purchase?product_id=annual` → tên + tham số, để log đọc được. */
@@ -126,14 +171,19 @@ export function PreviewModal({ value, title, onClose }: Props) {
 
         // Ghi chú của engine vào log, KHÔNG vào banner. Mỗi lần tap nút Mua,
         // DivKit báo "Unknown type of action" — đúng, vì action đó thuộc host
-        // app — nên banner đỏ sẽ bật lên che đáy layout ở mỗi lần bấm. Chỉ
-        // giữ một dòng cho mỗi thông điệp: bấm mười lần không phải mười dòng.
+        // app — nên banner đỏ sẽ bật lên che đáy layout ở mỗi lần bấm.
+        //
+        // Chống trùng theo CẢ message VÀ context, không chỉ message: hai video
+        // hỏng vì hai lý do khác nhau đều mang message "Video playing error",
+        // mà gộp lại thì cái thứ hai biến mất — đúng cái mình cần thấy nhất.
         const noted = new Set<string>();
-        const note = (message: string) => {
-            if (noted.has(message)) return;
-            noted.add(message);
+        const note = (err: PreviewError) => {
+            const entry = describeError(err);
+            const key = entry.name + '|' + entry.params.map(p => p.join('=')).join('|');
+            if (noted.has(key)) return;
+            noted.add(key);
             const at = new Date().toLocaleTimeString('vi-VN', { hour12: false });
-            setLog(prev => [{ id: ++n, at, name: message, params: [], error: true }, ...prev].slice(0, 100));
+            setLog(prev => [{ id: ++n, at, ...entry }, ...prev].slice(0, 100));
         };
 
         let instance: CardPreviewInstance | null = null;
@@ -144,7 +194,7 @@ export function PreviewModal({ value, title, onClose }: Props) {
                 theme: 'light',
                 onCustomAction: push,
                 onStat: ({ action }) => push(action),
-                onError: (e) => note(String(e.message || e))
+                onError: note
             });
         } catch (e) {
             // Ném ra là không dựng được gì cả (vd sai format) — chỗ đó mới cần
@@ -223,7 +273,7 @@ export function PreviewModal({ value, title, onClose }: Props) {
                         ) : (
                             <ol className="pv-log-list">
                                 {log.map(e => (
-                                    <li key={e.id} className={e.error ? 'is-note' : undefined}>
+                                    <li key={e.id} className={e.level && `is-${e.level}` || undefined}>
                                         <span className="pv-log-time">{e.at}</span>
                                         <span className="pv-log-name" title={e.raw}>{e.name}</span>
                                         {e.params.length > 0 && (
@@ -235,11 +285,12 @@ export function PreviewModal({ value, title, onClose }: Props) {
                                 ))}
                             </ol>
                         )}
-                        {log.some(e => e.raw?.includes('@{')) && (
+                        {log.some(e => !e.level && e.raw?.includes('@{')) && (
                             <p className="pv-log-note">
-                                Tham số hiện đúng như khai báo trong layout. DivKit đưa url ở dạng
-                                chưa tính, nên <code>@{'{…}'}</code> không được thay giá trị ở đây —
-                                trên máy thật host app nhận bản đã tính.
+                                Dòng action hiện url như khai báo trong layout, nên
+                                <code>@{'{…}'}</code> còn nguyên — DivKit đưa action ở dạng chưa
+                                tính. Máy thật thì host app nhận bản đã tính, và dòng lỗi bên trên
+                                (nếu có <code>url=</code>) cũng là bản đã tính.
                             </p>
                         )}
                     </aside>

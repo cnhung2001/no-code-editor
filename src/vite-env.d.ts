@@ -58,13 +58,21 @@ declare module '@divkitframework/visual-editor/dist/preview.js' {
         url?: string;
         [key: string]: unknown;
     }
+    /**
+     * Lỗi/cảnh báo từ engine. `additional` là chỗ chứa nguyên nhân thật —
+     * `message` một mình thường không đủ để biết cái gì sai ở đâu.
+     */
+    export interface PreviewError extends Error {
+        level: 'error' | 'warn';
+        additional?: Record<string, unknown>;
+    }
     export interface CardPreviewOptions {
         node: HTMLElement;
         value: string;
         theme?: 'light' | 'dark';
         languageCode?: string;
         direction?: 'ltr' | 'rtl';
-        onError?(error: Error): void;
+        onError?(error: PreviewError): void;
         /** Action host app phải xử lý trên máy thật (purchase, close, restore…). */
         onCustomAction?(action: PreviewAction): void;
         /** Mọi action, kể cả set_variable và đổi state. */

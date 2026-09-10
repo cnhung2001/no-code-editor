@@ -16,6 +16,6 @@
 
 export { renderCardPreview, renderLottiePreview, detectJsonKind } from './lib/data/cardPreview';
 export type {
-    CardPreviewOptions, CardPreviewInstance, JsonKind, PreviewAction,
+    CardPreviewOptions, CardPreviewInstance, JsonKind, PreviewAction, PreviewError,
     LottiePreviewOptions, LottiePreviewInstance
 } from './lib/data/cardPreview';
