@@ -28,6 +28,8 @@ interface LogEntry {
     name: string;
     params: [string, string][];
     raw?: string;
+    /** Ghi chú của engine (vd action nó không xử lý được), không phải action. */
+    error?: boolean;
 }
 
 /** `div-action://purchase?product_id=annual` → tên + tham số, để log đọc được. */
@@ -48,8 +50,22 @@ function describe(action: PreviewAction): Omit<LogEntry, 'id' | 'at'> {
     }
 }
 
+/**
+ * Tỉ lệ để khung `w×h` nằm gọn trong ô `availW×availH`.
+ *
+ * Chặn trên ở 1: màn 414x896 trên laptop 13" thì phải thu nhỏ, nhưng modal
+ * rộng hơn khung thì đừng phóng to — 1:1 mới là kích thước thật của thiết bị,
+ * phóng lên chỉ làm mọi thứ to bất thường mà không thêm thông tin gì.
+ */
+function fitScale(w: number, h: number, availW: number, availH: number): number {
+    if (!w || !h || !availW || !availH) return 1;
+    return Math.min(1, availW / w, availH / h);
+}
+
 export function PreviewModal({ value, title, onClose }: Props) {
     const stageRef = useRef<HTMLDivElement>(null);
+    const fitRef = useRef<HTMLDivElement>(null);
+    const [scale, setScale] = useState(1);
     const [viewport, setViewport] = useState(VIEWPORT_LIST[0]);
     const [log, setLog] = useState<LogEntry[]>([]);
     const [err, setErr] = useState<string | null>(null);
@@ -58,6 +74,18 @@ export function PreviewModal({ value, title, onClose }: Props) {
     const [nonce, setNonce] = useState(0);
 
     const [w, h] = viewport.split('x').map(Number);
+
+    // Đo ô chứa, không đo .pv-frame-wrap: wrap có padding, còn .pv-fit lấp đúng
+    // content box của nó nên clientWidth/Height là chỗ thật sự dùng được.
+    useEffect(() => {
+        const box = fitRef.current;
+        if (!box) return;
+        const observer = new ResizeObserver(() => {
+            setScale(fitScale(w, h, box.clientWidth, box.clientHeight));
+        });
+        observer.observe(box);
+        return () => observer.disconnect();
+    }, [w, h]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -77,16 +105,35 @@ export function PreviewModal({ value, title, onClose }: Props) {
         // (`myapp://…`) thì tới onCustomAction, và có thể tới cả hai. Dedupe theo
         // chính object đó: DivKit truyền một instance duy nhất, nên so khớp bằng
         // identity chắc hơn mọi cách đoán theo url.
-        const logged = new WeakSet<object>();
+        //
+        // Nhưng CHỈ trong một lần tap. Object action là object trong json của
+        // card, nên bấm cùng một nút lần nữa sẽ đưa lại đúng object đó — dedupe
+        // vĩnh viễn thì bấm Mua mười lần chỉ ra một dòng, và không ai biết chín
+        // lần sau có ăn hay không. Hai callback chạy đồng bộ trong cùng một
+        // task, nên xoá ở cuối task là đủ hẹp mà vẫn đủ rộng.
+        const seen = new Set<object>();
         let n = 0;
         const push = (action: PreviewAction) => {
             if (action && typeof action === 'object') {
-                if (logged.has(action)) return;
-                logged.add(action);
+                if (seen.has(action)) return;
+                seen.add(action);
+                setTimeout(() => seen.delete(action), 0);
             }
             const at = new Date().toLocaleTimeString('vi-VN', { hour12: false });
             // Mới nhất lên đầu: log dài thì thứ vừa bấm phải thấy ngay.
             setLog(prev => [{ id: ++n, at, ...describe(action) }, ...prev].slice(0, 100));
+        };
+
+        // Ghi chú của engine vào log, KHÔNG vào banner. Mỗi lần tap nút Mua,
+        // DivKit báo "Unknown type of action" — đúng, vì action đó thuộc host
+        // app — nên banner đỏ sẽ bật lên che đáy layout ở mỗi lần bấm. Chỉ
+        // giữ một dòng cho mỗi thông điệp: bấm mười lần không phải mười dòng.
+        const noted = new Set<string>();
+        const note = (message: string) => {
+            if (noted.has(message)) return;
+            noted.add(message);
+            const at = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+            setLog(prev => [{ id: ++n, at, name: message, params: [], error: true }, ...prev].slice(0, 100));
         };
 
         let instance: CardPreviewInstance | null = null;
@@ -97,9 +144,11 @@ export function PreviewModal({ value, title, onClose }: Props) {
                 theme: 'light',
                 onCustomAction: push,
                 onStat: ({ action }) => push(action),
-                onError: (e) => setErr(String(e.message || e))
+                onError: (e) => note(String(e.message || e))
             });
         } catch (e) {
+            // Ném ra là không dựng được gì cả (vd sai format) — chỗ đó mới cần
+            // banner, và lúc đó khung trống nên che cũng không mất gì.
             setErr(String((e as Error).message || e));
         }
 
@@ -123,6 +172,11 @@ export function PreviewModal({ value, title, onClose }: Props) {
                         >
                             {VIEWPORT_LIST.map(v => <option key={v} value={v}>{v}</option>)}
                         </select>
+                        {scale < 1 && (
+                            <span className="pv-scale" title="Khung được thu nhỏ cho vừa cửa sổ">
+                                {Math.round(scale * 100)}%
+                            </span>
+                        )}
                         <button className="btn ghost sm" onClick={() => setNonce(n => n + 1)}>
                             {Icon.refresh} Reset
                         </button>
@@ -132,10 +186,24 @@ export function PreviewModal({ value, title, onClose }: Props) {
 
                 <div className="pv-body">
                     <div className="pv-frame-wrap">
-                        {/* Khung cố định theo viewport; card có match_parent sẽ tự
-                            giãn vừa nó, nên đổi viewport không cần dựng lại. */}
-                        <div className="pv-frame" style={{ width: w, height: h }}>
-                            <div ref={stageRef} className="pv-stage" />
+                        <div ref={fitRef} className="pv-fit">
+                            {/* Hộp ngoài mang kích thước ĐÃ scale nên nó là một item
+                                bình thường, không tràn — canh giữa thế nào cũng đúng.
+                                Khung bên trong giữ ĐÚNG số px của viewport rồi scale
+                                từ góc trên-trái: card phải resolve match_parent theo
+                                414x896 thật, không theo chỗ còn lại trong modal.
+                                Bấm vẫn ăn, browser tự map toạ độ chuột qua transform. */}
+                            <div
+                                className="pv-scaled"
+                                style={{ width: w * scale, height: h * scale }}
+                            >
+                                <div
+                                    className="pv-frame"
+                                    style={{ width: w, height: h, transform: `scale(${scale})` }}
+                                >
+                                    <div ref={stageRef} className="pv-stage" />
+                                </div>
+                            </div>
                         </div>
                         {err && <div className="pv-error">Lỗi render: {err}</div>}
                     </div>
@@ -155,7 +223,7 @@ export function PreviewModal({ value, title, onClose }: Props) {
                         ) : (
                             <ol className="pv-log-list">
                                 {log.map(e => (
-                                    <li key={e.id}>
+                                    <li key={e.id} className={e.error ? 'is-note' : undefined}>
                                         <span className="pv-log-time">{e.at}</span>
                                         <span className="pv-log-name" title={e.raw}>{e.name}</span>
                                         {e.params.length > 0 && (

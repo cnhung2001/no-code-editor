@@ -147,17 +147,33 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .preview-modal { width: min(1000px, 90vw); height: min(940px, 88vh); }
 .pv-head-actions { display: flex; align-items: center; gap: 8px; }
 .pv-viewport { font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--ink); cursor: pointer; }
-.pv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; }
-/* Khung device có thể cao hơn modal (812px trên laptop 13") → cho cuộn,
-   đừng cắt mất đáy layout, vì đáy paywall là chỗ đặt nút Mua. */
-.pv-frame-wrap { overflow: auto; display: grid; place-items: start center; padding: 20px; background: #eceae2; }
-.pv-frame { position: relative; flex: none; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 34px rgba(0, 0, 0, .18); }
+.pv-scale { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+/* grid-template-rows: minmax(0, 1fr) — giống .p-body, và ở đây là BẮT BUỘC:
+   row `auto` sẽ cao theo khung device (896px), rồi .pv-fit cao 100% của row đó,
+   nên phép đo "còn bao nhiêu chỗ" trả về chính chiều cao của thứ cần thu nhỏ →
+   scale luôn ra 1 và khung không bao giờ vừa. */
+.pv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: minmax(0, 1fr); }
+/* Khung device cao hơn modal (896px trên laptop 13") thì THU NHỎ cho vừa, chứ
+   không cuộn: cuộn nghĩa là không bao giờ thấy cả màn một lúc, mà nhìn tổng thể
+   mới là việc của preview. overflow: hidden để không có scrollbar nào chen vào
+   phép đo — scrollbar hiện/ẩn sẽ làm ResizeObserver dao động. */
+.pv-frame-wrap { position: relative; overflow: hidden; min-width: 0; min-height: 0; background: #eceae2; }
+/* inset thay cho width/height 100%, cùng lý do như .thumb-live: đo bằng phần
+   trăm thì % resolve theo grid row, mà row là `auto` nên nó cao theo chính
+   khung device cần thu nhỏ — phép đo trả về đúng thứ mình đang muốn đo, scale
+   luôn ra 1. Lấy kích thước từ HỘP của wrap thì không có đường vòng nào. */
+.pv-fit { position: absolute; inset: 20px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); place-items: center; }
+/* Kích thước = khung SAU scale, nên đây là item không tràn và canh giữa chắc
+   chắn đúng. Nếu để .pv-frame (812px) tự canh giữa thì nó tràn khỏi row, mà
+   phần tử tràn thì neo ở đỉnh chứ không canh giữa — khung sẽ lệch xuống. */
+.pv-scaled { position: relative; }
+.pv-frame { position: absolute; top: 0; left: 0; transform-origin: top left; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 34px rgba(0, 0, 0, .18); }
 .pv-stage { width: 100%; height: 100%; }
 /* Cùng luật với .thumb-live-stage: prepareTarget của cardPreview chỉ đặt
    flex + align-items:stretch, mà stretch lo chiều CAO. Chiều ngang phải nói
    rõ, nếu không root card co về bề rộng nội dung — nửa khung để trống. */
 .pv-stage > * { width: 100%; }
-.pv-error { margin-top: 12px; padding: 8px 12px; border-radius: 9px; background: #fdecec; color: #a11; font-size: 12.5px; max-width: 420px; }
+.pv-error { position: absolute; left: 20px; right: 20px; bottom: 16px; padding: 8px 12px; border-radius: 9px; background: #fdecec; color: #a11; font-size: 12.5px; }
 
 .pv-log { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
 .pv-log-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 12.5px; }
@@ -167,6 +183,7 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .pv-log-time { color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
 .pv-log-name { font-weight: 600; word-break: break-all; }
 .pv-log-args { grid-column: 2; color: var(--ink-2); font-family: var(--mono); font-size: 11px; word-break: break-all; }
+.pv-log-list li.is-note .pv-log-name { font-weight: 500; color: var(--amber); }
 .pv-log-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 11px; line-height: 1.5; }
 .pv-log-note code { font-family: var(--mono); background: #f2f3f0; padding: 0 3px; border-radius: 4px; }
 .meta-copy { display: flex; align-items: flex-start; gap: 4px; }
