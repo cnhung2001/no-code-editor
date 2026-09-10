@@ -13,7 +13,26 @@ export const BUILDER_LAYOUT = [
     { items: ['component-props:code'], minWidth: 360 }
 ];
 
-export const VIEWPORT_LIST = ['375x812', '390x844', '414x896', '360x800'];
+// Kích thước LOGICAL (point trên iOS, dp trên Android) — không phải pixel vật
+// lý: iPhone X là DPR 3 nên 375x812 pt = 1125x2436 px thật.
+//
+// Phần tử ĐẦU TIÊN là default của cả editor và Preview. Editor chọn theo
+// `viewportList.includes('360x640') ? '360x640' : viewportList[0]`
+// (visual-editor Canvas.svelte), mà list này không có 360x640 nên nó rơi về
+// phần tử đầu. Hai hệ quả: đừng đảo 375x812 khỏi vị trí đầu, và đừng thêm
+// 360x640 — thêm là nó lặng lẽ chiếm quyền default.
+export const VIEWPORT_LIST = [
+    // ── iOS ───────────────────────────────────────────────────────────────
+    '375x812', // iPhone X · XS · 11 Pro · 12 mini · 13 mini  ← default
+    '375x667', // iPhone SE 2/3 · 8 — màn THẤP NHẤT, chỗ nút CTA bị đẩy khỏi
+               //   mép dưới trước tiên; paywall vừa khít 812 vẫn có thể vỡ ở đây
+    '390x844', // iPhone 12 · 12 Pro · 13 · 13 Pro · 14
+    '393x852', // iPhone 14 Pro · 15 · 15 Pro · 16
+    '414x896', // iPhone XR · 11 · XS Max · 11 Pro Max
+    '430x932', // iPhone 14 Pro Max · 15 Plus · 15 Pro Max · 16 Plus
+    // ── Android ───────────────────────────────────────────────────────────
+    '360x800'  // Mốc dp phổ biến nhất (Galaxy S/A và phần lớn máy tầm trung)
+];
 
 // Action tuỳ biến cho paywall (hiện trong dropdown action của editor)
 export const CUSTOM_ACTIONS = [

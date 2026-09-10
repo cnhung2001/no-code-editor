@@ -142,8 +142,9 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .meta-modal-body dd { margin: 0; word-break: break-all; }
 
 /* ── Preview modal: khung device + action log ─────────────────────────────
-   Rộng/cao theo viewport lớn nhất trong VIEWPORT_LIST (414x896) cộng log,
-   nhưng vẫn nhường .modal cắt ở 90vw/88vh trên màn nhỏ. */
+   Rộng/cao đủ cho viewport lớn nhất trong VIEWPORT_LIST (430x932) cộng log,
+   nhưng vẫn nhường .modal cắt ở 90vw/88vh trên màn nhỏ — khung tự scale cho
+   vừa chỗ còn lại nên con số ở đây không phải giới hạn cứng. */
 .preview-modal { width: min(1000px, 90vw); height: min(940px, 88vh); }
 .pv-head-actions { display: flex; align-items: center; gap: 8px; }
 .pv-viewport { font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--ink); cursor: pointer; }
