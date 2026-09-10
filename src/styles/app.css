@@ -140,6 +140,35 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .meta-modal-body dl { display: grid; grid-template-columns: 92px 1fr; gap: 8px 12px; margin: 0; font-size: 13px; }
 .meta-modal-body dt { color: var(--ink-3); }
 .meta-modal-body dd { margin: 0; word-break: break-all; }
+
+/* ── Preview modal: khung device + action log ─────────────────────────────
+   Rộng/cao theo viewport lớn nhất trong VIEWPORT_LIST (414x896) cộng log,
+   nhưng vẫn nhường .modal cắt ở 90vw/88vh trên màn nhỏ. */
+.preview-modal { width: min(1000px, 90vw); height: min(940px, 88vh); }
+.pv-head-actions { display: flex; align-items: center; gap: 8px; }
+.pv-viewport { font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.pv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; }
+/* Khung device có thể cao hơn modal (812px trên laptop 13") → cho cuộn,
+   đừng cắt mất đáy layout, vì đáy paywall là chỗ đặt nút Mua. */
+.pv-frame-wrap { overflow: auto; display: grid; place-items: start center; padding: 20px; background: #eceae2; }
+.pv-frame { position: relative; flex: none; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 34px rgba(0, 0, 0, .18); }
+.pv-stage { width: 100%; height: 100%; }
+/* Cùng luật với .thumb-live-stage: prepareTarget của cardPreview chỉ đặt
+   flex + align-items:stretch, mà stretch lo chiều CAO. Chiều ngang phải nói
+   rõ, nếu không root card co về bề rộng nội dung — nửa khung để trống. */
+.pv-stage > * { width: 100%; }
+.pv-error { margin-top: 12px; padding: 8px 12px; border-radius: 9px; background: #fdecec; color: #a11; font-size: 12.5px; max-width: 420px; }
+
+.pv-log { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+.pv-log-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 12.5px; }
+.pv-log-empty { margin: 0; padding: 14px; color: var(--ink-3); font-size: 12px; line-height: 1.55; }
+.pv-log-list { flex: 1; overflow: auto; margin: 0; padding: 6px 0; list-style: none; }
+.pv-log-list li { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 7px 14px; border-bottom: 1px solid #f2f3f0; font-size: 12px; }
+.pv-log-time { color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.pv-log-name { font-weight: 600; word-break: break-all; }
+.pv-log-args { grid-column: 2; color: var(--ink-2); font-family: var(--mono); font-size: 11px; word-break: break-all; }
+.pv-log-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 11px; line-height: 1.5; }
+.pv-log-note code { font-family: var(--mono); background: #f2f3f0; padding: 0 3px; border-radius: 4px; }
 .meta-copy { display: flex; align-items: flex-start; gap: 4px; }
 .meta-copy > span { min-width: 0; }
 .meta-copy .icon-btn { flex: none; margin-top: -3px; }

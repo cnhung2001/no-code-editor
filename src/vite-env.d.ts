@@ -52,6 +52,12 @@ declare module '@divkitframework/visual-editor' {
 // Barrel ở trên KHÔNG khai lại mấy hàm này — khai cả hai chỗ là mời người ta
 // import từ barrel cho "gọn" rồi lôi luôn editor vào chunk khởi động.
 declare module '@divkitframework/visual-editor/dist/preview.js' {
+    /** Action DivKit thực thi. Khai lỏng vì typings gốc không đi kèm bản build. */
+    export interface PreviewAction {
+        log_id?: string;
+        url?: string;
+        [key: string]: unknown;
+    }
     export interface CardPreviewOptions {
         node: HTMLElement;
         value: string;
@@ -59,6 +65,10 @@ declare module '@divkitframework/visual-editor/dist/preview.js' {
         languageCode?: string;
         direction?: 'ltr' | 'rtl';
         onError?(error: Error): void;
+        /** Action host app phải xử lý trên máy thật (purchase, close, restore…). */
+        onCustomAction?(action: PreviewAction): void;
+        /** Mọi action, kể cả set_variable và đổi state. */
+        onStat?(details: { type: string; action: PreviewAction }): void;
     }
     export interface CardPreviewInstance {
         destroy(): void;

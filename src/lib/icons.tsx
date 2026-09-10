@@ -24,5 +24,6 @@ export const Icon: Record<string, ReactNode> = {
     trash: <svg viewBox="0 0 24 24" width="16" height="16" {...s}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" /></svg>,
     media: <svg viewBox="0 0 24 24" width="18" height="18" {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M10 9.5v5l4-2.5z" /></svg>,
     copy: <svg viewBox="0 0 24 24" width="16" height="16" {...s}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>,
-    info: <svg viewBox="0 0 24 24" width="16" height="16" {...s}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.6h.01" strokeWidth={2.4} /></svg>
+    info: <svg viewBox="0 0 24 24" width="16" height="16" {...s}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.6h.01" strokeWidth={2.4} /></svg>,
+    eye: <svg viewBox="0 0 24 24" width="16" height="16" {...s}><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></svg>
 };

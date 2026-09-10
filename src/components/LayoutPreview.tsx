@@ -12,6 +12,7 @@ import { toSaveFormat, extractLogId, extractMeta } from '../editor/wrapper';
 import { usePerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
 import { Loader } from './Loader';
+import { PreviewModal } from './modals/PreviewModal';
 
 interface Props {
     path: string[];
@@ -30,6 +31,9 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
     const [dirty, setDirty] = useState(false);
     const [toast, setToast] = useState('');
     const [showMeta, setShowMeta] = useState(false);
+    // Giá trị đem đi preview được CHỐT lúc bấm, không đọc lại mỗi lần render:
+    // người ta sửa tiếp trong editor thì bản đang dùng thử phải đứng yên.
+    const [previewValue, setPreviewValue] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const copyTimer = useRef(0);
 
@@ -84,6 +88,12 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
         }
     }
 
+    // Preview bản ĐANG SỬA, không phải bản trên S3: sửa xong bấm thử ngay là
+    // lý do màn này tồn tại. Chưa dựng được editor thì lấy bản vừa tải về.
+    function openPreview() {
+        setPreviewValue(editorRef.current?.getValue() || resolved || '');
+    }
+
     function push() {
         const v = editorRef.current?.getValue();
         if (v && file.key) onPush(toSaveFormat(v), extractMeta(v));
@@ -96,6 +106,9 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                 <span className="p-title">{file.name}{dirty && '*'}</span>
                 <div className="p-actions">
                     <button className="btn ghost sm" onClick={() => setShowMeta(true)}>{Icon.info} Metadata</button>
+                    <button className="btn ghost sm" onClick={openPreview} disabled={!resolved}>
+                        {Icon.eye} Preview
+                    </button>
                     <button className="btn ghost sm" onClick={download}>{Icon.download} Download</button>
                     {perms.update && (
                         <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
@@ -155,6 +168,14 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {previewValue !== null && (
+                <PreviewModal
+                    value={previewValue}
+                    title={file.name}
+                    onClose={() => setPreviewValue(null)}
+                />
             )}
 
             {toast && <div className="toast">{Icon.check} {toast}</div>}

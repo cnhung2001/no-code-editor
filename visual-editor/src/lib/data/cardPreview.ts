@@ -1,6 +1,8 @@
 import { render, createVariable, createGlobalVariablesController } from '@divkitframework/divkit/client-devtool';
 import type { CustomComponentDescription } from '@divkitframework/divkit/typings/custom';
-import type { Direction, DivJson, DivVariable } from '@divkitframework/divkit/typings/common';
+import type {
+    CustomActionCallback, Direction, DivJson, DivVariable, StatCallback
+} from '@divkitframework/divkit/typings/common';
 import { collectCustomComponents } from './customComponents';
 import { createDivExtensions } from './divExtensions';
 
@@ -13,6 +15,12 @@ import { createDivExtensions } from './divExtensions';
  * down; nothing here knows about thumbnails.
  */
 
+/**
+ * Action như khi nó tới `onCustomAction`/`onStat`. Dẫn xuất từ type của DivKit
+ * chứ không gõ lại: gõ lại là mời hai bên lệch nhau khi DivKit đổi.
+ */
+export type PreviewAction = Parameters<CustomActionCallback>[0];
+
 export interface CardPreviewOptions {
     node: HTMLElement;
     /** Wrapper (`{ screen_id, remote_layout, variables }`) or a bare DivKit card. */
@@ -22,6 +30,22 @@ export interface CardPreviewOptions {
     languageCode?: string;
     direction?: Direction;
     onError?(error: Error): void;
+    /**
+     * Chỉ những scheme LẠ (`myapp://…`). Đã kiểm: `div-action://purchase` KHÔNG
+     * tới đây — DivKit coi `div-action` là protocol có sẵn nên mọi path dưới nó,
+     * kể cả path nó không biết, đều đi đường builtin. Muốn bắt action paywall
+     * thì dùng `onStat`.
+     */
+    onCustomAction?: CustomActionCallback;
+    /**
+     * Mọi action DivKit thực thi, gồm cả `div-action://purchase|close|restore`
+     * và `set_variable`. Đây là chỗ duy nhất thấy được action của paywall.
+     *
+     * `action.url` là url như KHAI BÁO trong layout, không phải bản đã tính:
+     * `product_id=@{selected}_plan` tới đây vẫn còn nguyên `@{…}`, dù cùng
+     * expression đó trong `background.color` thì được tính bình thường.
+     */
+    onStat?: StatCallback;
 }
 
 export interface CardPreviewInstance {
@@ -159,6 +183,8 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
         extensions: createDivExtensions(),
         customComponents,
         direction: opts.direction || 'ltr',
+        onCustomAction: opts.onCustomAction,
+        onStat: opts.onStat,
         onError(event) {
             opts.onError?.(event.error);
         }
