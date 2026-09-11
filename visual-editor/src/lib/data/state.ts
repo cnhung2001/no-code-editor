@@ -15,6 +15,7 @@ import { paletteToDivjson } from './docToDivjson';
 import { getTankerKeyRaw, tankerKeyToVariableName } from '../utils/tanker';
 import { EMPTY_IMAGE, stringifyObjectAndStoreRanges } from './doc';
 import { findLeaf, walk } from '../utils/tree';
+import { copyValue } from '../utils/copyValue';
 import { isSimpleElement } from './schema';
 import templateIcon from '../../assets/components/template.svg?url';
 import { componentIcon } from '../utils/componentIcon';
@@ -281,13 +282,27 @@ export class State {
 
         const nodeToDivjson = (leaf: TreeLeaf) => {
             const newJson = leaf.props.json;
+            // todo support tabs and others
+            const baseType = this.getBaseType(leaf.props.json?.type);
+
+            // Chép SÂU từng prop, không chỉ {...newJson}. Bản spread cho ra node
+            // mới nhưng các prop kiểu object (aspect, separator, …) vẫn trỏ vào
+            // đúng object cũ. DivKit build Svelte với immutable:true — nó so prop
+            // theo ĐỊNH DANH object: thấy node đổi thì rebind() xoá giá trị đang
+            // giữ, rồi thấy prop "y nguyên" nên không đặt lại. Hậu quả: sửa một
+            // prop bất kỳ là aspect của container bay mất, ảnh nở kín màn hình.
+            // Trường chứa con được dựng lại ngay bên dưới nên không chép.
             const json = {
                 ...newJson,
                 __leafId: leaf.id
             };
+            for (const key in json) {
+                if (key === '__leafId' || key === 'items' || (key === 'states' && baseType === 'state')) {
+                    continue;
+                }
+                json[key] = copyValue(json[key]);
+            }
 
-            // todo support tabs and others
-            const baseType = this.getBaseType(leaf.props.json?.type);
             let fieldName = leaf.props.fromDataField;
             if (baseType === 'state') {
                 fieldName ||= 'states';

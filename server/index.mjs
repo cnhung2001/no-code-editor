@@ -37,6 +37,7 @@ import {
 import { DB_ENABLED, ensureSchema } from './db.mjs';
 import { auditMiddleware, search as searchAudit } from './audit.mjs';
 import { accessiblePrefixes } from './project-scope.mjs';
+import { DRAFT_SEGMENT, draftKey, draftPrefix } from './draft-key.mjs';
 import {
     createProject,
     deleteProject,
@@ -50,6 +51,11 @@ const {
     S3_BUCKET = 'ik-nocode-paywall',
     PRESIGN_TTL = '900',
     CLOUDFRONT_DISTRIBUTION_ID = '',
+    // Endpoint purge cache do team hạ tầng dựng (xoá cả CloudFront lẫn Cloudflare).
+    // Nó xoá theo DIỆN RỘNG, không nhận key — nên chỉ gọi khi thật sự ghi đè một
+    // layout đã có, xem §publish. Để trống = tắt.
+    CDN_PURGE_URL = 'https://ocj5tukx8f.execute-api.ap-southeast-1.amazonaws.com/v1/delete-cache-cloudfront-cloudflare',
+    CDN_PURGE_TIMEOUT_MS = '15000',
     USE_S3_VERSIONING = 'true',
     // Sau khi gộp về một origin (§A), browser không còn gọi cross-origin nên
     // CORS mặc định TẮT. Chỉ bật khi thực sự cần client khác origin gọi vào —
@@ -69,6 +75,39 @@ const {
 
 const s3 = new S3Client({ region: AWS_REGION });
 const cf = CLOUDFRONT_DISTRIBUTION_ID ? new CloudFrontClient({ region: AWS_REGION }) : null;
+
+/**
+ * Gọi endpoint purge cache CDN. Trả true/false chứ KHÔNG ném: file đã nằm trên
+ * S3 rồi, để purge hỏng đánh đổ cả publish thì người dùng push lại lần nữa chỉ
+ * đẻ thêm một version rác mà cache vẫn bẩn. Trả về để client còn hiện cảnh báo.
+ */
+async function purgeCdnCache() {
+    try {
+        const r = await fetch(CDN_PURGE_URL, {
+            signal: AbortSignal.timeout(Number(CDN_PURGE_TIMEOUT_MS) || 15000)
+        });
+        if (!r.ok) {
+            throw new Error(`${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+        }
+        return true;
+    } catch (e) {
+        console.error('[cdn-purge]', String(e.message || e));
+        return false;
+    }
+}
+
+// ── Draft: bản nháp nằm ở prefix RIÊNG, không đè key mà app đang đọc ───────
+// Cách đặt key và lý do xem server/draft-key.mjs.
+
+/** Xoá bản nháp sau khi publish/xoá file thật. Hỏng thì kệ — không đáng đánh đổ request. */
+async function dropDraft(key) {
+    const dk = draftKey(key);
+    if (!dk || dk === key) return;
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: dk }));
+        forgetJsonKind(dk);
+    } catch { /* chưa có nháp, hoặc xoá hỏng — không chặn luồng chính */ }
+}
 
 const app = express();
 if (CORS_ORIGIN) {
@@ -175,31 +214,69 @@ const LOTTIE_MARK = /"fr"\s*:\s*[\d.]/;
 
 // Cache theo ETag: điều hướng qua lại một project không phải peek lại, và ETag
 // đổi thì entry cũ tự hết hiệu lực.
+//
+// ETag dùng để đối chiếu lấy từ CHÍNH kết quả ListObjectsV2 của route gọi vào —
+// đó là điểm mấu chốt. Trước đây cache đối chiếu bằng ETag của ranged GET, tức
+// phải gọi S3 rồi mới biết cache còn đúng: tiết kiệm 512 byte parse, không tiết
+// kiệm round-trip nào. Mỗi lần đổi tab là ~32 ranged GET thừa (~400ms).
 const jsonKindCache = new Map();
 
+// Danh sách nông và danh sách đệ quy của cùng một project chạy song song và phủ
+// lên nhau ở các file cấp gốc. Cache nguội thì cả hai cùng miss → gộp về một
+// lượt peek thay vì hai. Key kèm ETag để hai bên kỳ vọng khác nhau (một bên
+// list trước, một bên sau khi file đổi) không dùng chung kết quả.
+const jsonPeekInflight = new Map();
+
 /**
- * Trả về { type, version, status } cho một object .json trong 1 request.
- * Ranged GET mang theo cả Metadata nên không cần HeadObject riêng.
+ * Trả về { type, version, status } cho một object .json.
+ *
+ * `etag` là ETag mà caller đã có sẵn từ ListObjectsV2. Khớp cache thì không
+ * chạm S3; không khớp (hoặc caller không có) thì mới ranged GET — nó mang theo
+ * cả Metadata nên vẫn không cần HeadObject riêng.
  */
-async function peekJson(key) {
+async function peekJson(key, etag) {
+    const cached = jsonKindCache.get(key);
+    if (etag && cached && cached.etag === etag) {
+        return { type: cached.type, version: cached.version, status: cached.status };
+    }
+
+    const slot = `${key}\u0000${etag || ''}`;
+    let pending = jsonPeekInflight.get(slot);
+    if (!pending) {
+        pending = fetchJsonHead(key).finally(() => jsonPeekInflight.delete(slot));
+        jsonPeekInflight.set(slot, pending);
+    }
+    return pending;
+}
+
+async function fetchJsonHead(key) {
     const out = await s3.send(new GetObjectCommand({
         Bucket: S3_BUCKET,
         Key: key,
         Range: `bytes=0-${JSON_PEEK_BYTES - 1}`
     }));
-    const meta = { version: out.Metadata?.version, status: out.Metadata?.status };
-    const etag = out.ETag;
-    const cached = etag && jsonKindCache.get(key);
-    if (cached && cached.etag === etag) {
-        return { type: cached.type, ...meta };
-    }
-
     const head = await streamToString(out.Body);
     // DivKit trước: một file lạ thì mặc định là layout — client verify lại bằng
     // detectJsonKind khi render, nên đoán sai chỉ tốn một lần đổi tỉ lệ tile.
-    const type = DIVKIT_MARK.test(head) ? 'json' : (LOTTIE_MARK.test(head) ? 'lottie' : 'json');
-    if (etag) jsonKindCache.set(key, { etag, type });
-    return { type, ...meta };
+    const entry = {
+        etag: out.ETag,
+        type: DIVKIT_MARK.test(head) ? 'json' : (LOTTIE_MARK.test(head) ? 'lottie' : 'json'),
+        version: out.Metadata?.version,
+        status: out.Metadata?.status
+    };
+    if (entry.etag) jsonKindCache.set(key, entry);
+    return { type: entry.type, version: entry.version, status: entry.status };
+}
+
+/**
+ * Bỏ entry cache của một key sau khi tiến trình này ghi/xoá nó.
+ *
+ * Cần thiết vì ETag là MD5 của NỘI DUNG: publish một draft mà không sửa gì thì
+ * body y hệt, ETag y hệt, nhưng metadata status draft→live đã đổi — chỉ so ETag
+ * sẽ trả về badge cũ mãi mãi.
+ */
+function forgetJsonKind(key) {
+    if (key) jsonKindCache.delete(key);
 }
 
 async function streamToString(stream) {
@@ -256,7 +333,7 @@ app.get('/api/list', async (req, res) => {
                     let type = kind(o.Key);
                     if (type === 'json') {
                         try {
-                            ({ type } = await peekJson(o.Key));
+                            ({ type } = await peekJson(o.Key, o.ETag));
                         } catch { /* ignore */ }
                     }
                     return {
@@ -278,11 +355,31 @@ app.get('/api/list', async (req, res) => {
         const out = await s3.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, Delimiter: '/' }));
         const folders = (out.CommonPrefixes || [])
             .filter((p) => !visible || visible.has(p.Prefix.replace(/\/$/, '')))
+            // .drafts/ là kho nháp, không phải folder của người dùng: hiện ra thì
+            // ai cũng vào sửa thẳng nháp của người khác qua đường vòng.
+            .filter((p) => p.Prefix.replace(prefix, '').replace(/\/$/, '') !== DRAFT_SEGMENT)
             .map((p) => ({
                 name: p.Prefix.replace(prefix, '').replace(/\/$/, ''),
                 type: 'folder',
                 prefix: p.Prefix
             }));
+
+        // Nháp của chính thư mục đang xem: đánh dấu file nào có nháp, và cho hiện
+        // cả những layout MỚI chỉ tồn tại dưới dạng nháp — không thì bấm Save
+        // draft xong là layout biến mất khỏi danh sách, không đường quay lại.
+        const dPrefix = visible ? null : draftPrefix(prefix);
+        const drafts = new Map();
+        if (dPrefix) {
+            try {
+                const dOut = await s3.send(new ListObjectsV2Command({
+                    Bucket: S3_BUCKET, Prefix: dPrefix, Delimiter: '/'
+                }));
+                for (const o of dOut.Contents || []) {
+                    if (o.Key === dPrefix) continue;
+                    drafts.set(o.Key.replace(dPrefix, ''), o);
+                }
+            } catch { /* chưa có nháp nào */ }
+        }
         const files = await Promise.all(
             (out.Contents || [])
                 .filter((o) => o.Key !== prefix) // bỏ marker folder
@@ -295,7 +392,7 @@ app.get('/api/list', async (req, res) => {
                     let version, status;
                     if (t === 'json') {
                         try {
-                            ({ type: t, version, status } = await peekJson(o.Key));
+                            ({ type: t, version, status } = await peekJson(o.Key, o.ETag));
                         } catch { /* ignore — giữ 'json' */ }
                     }
                     return {
@@ -306,22 +403,94 @@ app.get('/api/list', async (req, res) => {
                         modified: o.LastModified?.toISOString(),
                         version,
                         status,
+                        hasDraft: drafts.has(name),
+                        // Trả thẳng key nháp thay vì để FE tự suy: quy tắc đặt key
+                        // chỉ nên có MỘT bản (draft-key.mjs), lệch một bên là nội
+                        // dung chưa duyệt nằm sai chỗ.
+                        draftKey: drafts.has(name) ? `${dPrefix}${name}` : undefined,
                         config: name === 'config.json'
                     };
                 })
         );
-        res.json([...folders, ...files]);
+
+        // Layout chỉ có nháp, chưa publish lần nào: key trả về là key THẬT (nơi nó
+        // sẽ nằm sau khi push), client mở bằng ?draft=1 nên vẫn ra đúng nội dung.
+        const seen = new Set(files.map((f) => f.name));
+        const draftOnly = [...drafts.entries()]
+            .filter(([name]) => !seen.has(name))
+            .map(([name, o]) => ({
+                name,
+                type: kind(name),
+                key: `${prefix}${name}`,
+                size: o.Size,
+                modified: o.LastModified?.toISOString(),
+                status: 'draft',
+                hasDraft: true,
+                draftOnly: true,
+                draftKey: `${dPrefix}${name}`
+            }));
+
+        res.json([...folders, ...files, ...draftOnly]);
     } catch (e) {
         res.status(500).send(String(e.message || e));
     }
 });
 
 // ── Lấy nội dung text (JSON) ───────────────────────────────────────────────
+// Có ETag + revalidate. Đây là route tốn băng thông nhất của tool: mỗi lần vào
+// một project là toàn bộ layout được tải về để dựng thumbnail (1.4 MB cho một
+// project cỡ trung), và F5 một cái là tải lại từ đầu.
+//
+// `no-cache` chứ không phải max-age: layout đổi khi có người publish, mà một
+// bản cũ hiện ra sau khi publish thì tệ hơn nhiều so với một request rỗng. Với
+// `no-cache` browser vẫn hỏi mọi lần, nhưng khớp ETag thì 304 và không tải body.
+//
+// If-None-Match được chuyển TIẾP xuống S3, không chỉ so ở đây: so ở đây thì vẫn
+// phải kéo nguyên file từ S3 về mới biết là giống nhau. Đẩy xuống S3 thì chặng
+// đó cũng rỗng nốt.
 app.get('/api/object', async (req, res) => {
+    const ifNoneMatch = req.headers['if-none-match'];
+    // draft=1: mở để SỬA → lấy bản nháp nếu có. Không truyền = lấy bản live, và
+    // đó là mặc định có chủ đích: diff lúc push và thumbnail phải là cái app đang
+    // thấy, không phải cái người ta đang nháp dở.
+    const dk = req.query.draft === '1' ? draftKey(req.query.key) : null;
     try {
-        const out = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: req.query.key }));
+        let source = 'live';
+        let out = null;
+        if (dk) {
+            try {
+                out = await s3.send(new GetObjectCommand({
+                    Bucket: S3_BUCKET,
+                    Key: dk,
+                    ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {})
+                }));
+                source = 'draft';
+            } catch (e) {
+                // 304 = nháp CÓ và không đổi; ném tiếp để nhánh catch trả 304.
+                if (e.$metadata?.httpStatusCode === 304) throw e;
+                // Còn lại coi như chưa có nháp → rơi về bản live bên dưới.
+            }
+        }
+        if (!out) {
+            out = await s3.send(new GetObjectCommand({
+                Bucket: S3_BUCKET,
+                Key: req.query.key,
+                ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {})
+            }));
+        }
+        // Đặt TRƯỚC send(): express tự sinh ETag yếu từ body nếu header còn trống,
+        // mà ETag của S3 mới là thứ so được với `IfNoneMatch` ở vòng sau.
+        if (out.ETag) res.set('ETag', out.ETag);
+        res.set('Cache-Control', 'no-cache');
+        res.set('X-Nocode-Source', source);
         res.type('application/json').send(await streamToString(out.Body));
     } catch (e) {
+        // S3 báo "không đổi" bằng cách ném, với http 304 trong metadata.
+        if (e.$metadata?.httpStatusCode === 304) {
+            res.set('ETag', ifNoneMatch);
+            res.set('Cache-Control', 'no-cache');
+            return res.status(304).end();
+        }
         res.status(500).send(String(e.message || e));
     }
 });
@@ -364,19 +533,28 @@ function buildMeta(base, meta) {
 // ── Lưu object (draft) ─────────────────────────────────────────────────────
 app.put('/api/object', async (req, res) => {
     const { key, body, status, meta } = req.body;
+    // Nháp KHÔNG ghi vào key thật: đó là đúng file app đang đọc, lưu nháp mà đè
+    // lên nó thì "nháp" chỉ là tên gọi. Client vẫn gửi key thật, server tự nắn.
+    const isDraft = (status ?? 'draft') === 'draft';
+    const targetKey = (isDraft && draftKey(key)) || key;
     try {
         const out = await s3.send(new PutObjectCommand({
             Bucket: S3_BUCKET,
-            Key: key,
+            Key: targetKey,
             Body: body,
             ContentType: 'application/json',
             Metadata: buildMeta(status ? { status } : {}, meta)
         }));
+        forgetJsonKind(targetKey);
         // Bucket bật versioning → giữ VersionId là đủ để sau này dựng lại đúng
         // nội dung trước/sau, không cần nhồi cả body layout vào DB audit.
         res.locals.s3VersionId = out.VersionId ?? null;
-        res.locals.auditDetail = { status: status ?? 'draft', bytes: Buffer.byteLength(body || '') };
-        res.json({ ok: true });
+        res.locals.auditDetail = {
+            status: status ?? 'draft',
+            bytes: Buffer.byteLength(body || ''),
+            key: targetKey
+        };
+        res.json({ ok: true, key: targetKey, draft: targetKey !== key });
     } catch (e) {
         res.status(500).send(String(e.message || e));
     }
@@ -388,6 +566,10 @@ app.delete('/api/object', async (req, res) => {
     if (!key) return res.status(400).send('thiếu key');
     try {
         const out = await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        forgetJsonKind(key);
+        // Bỏ nháp theo cùng: để lại thì file "đã xoá" vẫn hiện trong danh sách
+        // dưới dạng mục chỉ-có-nháp, không ai hiểu vì sao.
+        await dropDraft(key);
         // Bucket bật versioning ⇒ đây là delete marker, bản cũ vẫn còn. VersionId
         // của marker cho phép khôi phục bằng cách xoá đúng marker đó.
         res.locals.s3VersionId = out.VersionId ?? null;
@@ -411,6 +593,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             Body: file.buffer,
             ContentType: file.mimetype
         }));
+        forgetJsonKind(key);
         // Enforce bằng quyền 'update', nhưng log là 'upload' cho dễ đọc lại.
         res.locals.auditAction = 'upload';
         res.locals.s3VersionId = out.VersionId ?? null;
@@ -437,14 +620,17 @@ app.post('/api/publish', async (req, res) => {
             } catch { /* file mới, chưa có bản cũ */ }
         }
 
-        // 2. Tính version mới
+        // 2. Key đã có trên S3 chưa? Dùng cho CẢ hai việc: tính version, và quyết
+        //    định có purge cache hay không ở bước 5.
+        let head = null;
+        try {
+            head = await s3.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        } catch { /* file mới */ }
+
         let nextVersion = 'v1';
-        if (bumpVersion) {
-            try {
-                const head = await s3.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
-                const cur = parseInt((head.Metadata?.version || 'v0').replace(/\D/g, ''), 10) || 0;
-                nextVersion = `v${cur + 1}`;
-            } catch { /* file mới */ }
+        if (bumpVersion && head) {
+            const cur = parseInt((head.Metadata?.version || 'v0').replace(/\D/g, ''), 10) || 0;
+            nextVersion = `v${cur + 1}`;
         }
 
         // 3. Ghi bản publish (status=live)
@@ -460,6 +646,7 @@ app.post('/api/publish', async (req, res) => {
                 'published-at': new Date().toISOString()
             }, meta)
         }));
+        forgetJsonKind(key);
         res.locals.s3VersionId = put.VersionId ?? null;
         res.locals.auditDetail = {
             version: nextVersion,
@@ -478,7 +665,20 @@ app.post('/api/publish', async (req, res) => {
             }));
         }
 
-        res.json({ ok: true, version: nextVersion });
+        // 5. Purge cache CDN. CHỈ khi ghi đè: key mới thì chưa có gì trong cache để
+        //    xoá, mà endpoint này purge diện rộng — gọi thừa là bắt mọi layout khác
+        //    của mọi project phải nạp lại từ origin.
+        let cachePurged = null;
+        if (invalidateCdn && head && CDN_PURGE_URL) {
+            cachePurged = await purgeCdnCache();
+        }
+        res.locals.auditDetail.cachePurged = cachePurged;
+
+        // 6. Nội dung nháp giờ đã là bản live → bỏ nháp, không thì file nào cũng
+        //    đeo nhãn "có bản nháp" vĩnh viễn dù nháp y hệt bản đang chạy.
+        await dropDraft(key);
+
+        res.json({ ok: true, version: nextVersion, cachePurged });
     } catch (e) {
         res.status(500).send(String(e.message || e));
     }

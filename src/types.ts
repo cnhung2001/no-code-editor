@@ -16,6 +16,12 @@ export interface S3Item {
     modified?: string; // ISO string
     version?: string; // từ object metadata, vd "v3"
     status?: LayoutStatus; // từ object metadata
+    /** Có bản nháp chưa publish nằm ở <project>/.drafts/ */
+    hasDraft?: boolean;
+    /** Chỉ mới có nháp, chưa publish lần nào — `key` là nơi nó SẼ nằm sau khi push. */
+    draftOnly?: boolean;
+    /** Key thật của bản nháp (`<project>/.drafts/…`), do server tính. */
+    draftKey?: string;
     config?: boolean; // true nếu là config.json
 }
 
@@ -38,15 +44,31 @@ export interface PublishOptions {
     meta?: LayoutMeta;
 }
 
+export interface PublishResult {
+    version: string;
+    /**
+     * Kết quả purge cache CDN: true = đã xoá, false = gọi endpoint purge hỏng
+     * (file VẪN publish xong), null = không gọi — layout mới, hoặc bỏ tick
+     * invalidate, hoặc server không cấu hình CDN_PURGE_URL.
+     */
+    cachePurged: boolean | null;
+}
+
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)
 export interface S3Adapter {
     listProjects(): Promise<ProjectInfo[]>;
-    /** recursive: mọi file dưới prefix, không gồm folder (dùng cho asset cả project). */
-    listPath(prefix: string, opts?: { recursive?: boolean }): Promise<S3Item[]>;
-    getObjectText(key: string): Promise<string>;
+    /**
+     * recursive: mọi file dưới prefix, không gồm folder (dùng cho asset cả project).
+     * signal: huỷ khi caller không còn cần kết quả — đổi tab liên tục mà không
+     * huỷ thì request của tab cũ vẫn chiếm hết 6 kết nối/origin của browser và
+     * tab mới phải xếp hàng sau chúng.
+     */
+    listPath(prefix: string, opts?: { recursive?: boolean; signal?: AbortSignal }): Promise<S3Item[]>;
+    /** preferDraft: mở để sửa → lấy bản nháp nếu có. Mặc định lấy bản live. */
+    getObjectText(key: string, signal?: AbortSignal, opts?: { preferDraft?: boolean }): Promise<string>;
     getAssetUrl(key: string): Promise<string>;
     putObject(key: string, body: string, status?: LayoutStatus, meta?: LayoutMeta): Promise<void>;
     deleteObject(key: string): Promise<void>;
     uploadAsset(project: string, file: File): Promise<string>;
-    publish(key: string, body: string, opts: PublishOptions): Promise<void>;
+    publish(key: string, body: string, opts: PublishOptions): Promise<PublishResult>;
 }

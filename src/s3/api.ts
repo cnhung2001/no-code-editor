@@ -8,7 +8,8 @@ import type {
     ProjectInfo,
     LayoutStatus,
     LayoutMeta,
-    PublishOptions
+    PublishOptions,
+    PublishResult
 } from '../types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -28,15 +29,16 @@ export const apiAdapter: S3Adapter = {
         return j<ProjectInfo[]>(await fetch(`${BASE}/projects`));
     },
 
-    async listPath(prefix: string, opts?: { recursive?: boolean }) {
+    async listPath(prefix: string, opts?: { recursive?: boolean; signal?: AbortSignal }) {
         const q = new URLSearchParams({ prefix });
         if (opts?.recursive) q.set('recursive', '1');
-        return j<S3Item[]>(await fetch(`${BASE}/list?${q}`));
+        return j<S3Item[]>(await fetch(`${BASE}/list?${q}`, { signal: opts?.signal }));
     },
 
-    async getObjectText(key: string) {
+    async getObjectText(key: string, signal?: AbortSignal, opts?: { preferDraft?: boolean }) {
         const q = new URLSearchParams({ key });
-        const res = await fetch(`${BASE}/object?${q}`);
+        if (opts?.preferDraft) q.set('draft', '1');
+        const res = await fetch(`${BASE}/object?${q}`, { signal });
         if (res.status === 401) redirectToLogin();
         if (!res.ok) throw new Error(`getObject ${res.status}`);
         return res.text();
@@ -76,7 +78,7 @@ export const apiAdapter: S3Adapter = {
     },
 
     async publish(key: string, body: string, opts: PublishOptions) {
-        await j(
+        return j<PublishResult>(
             await fetch(`${BASE}/publish`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },

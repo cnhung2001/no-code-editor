@@ -18,6 +18,9 @@ export function PushModal({ target, onClose, onDone }: Props) {
     const [invalidate, setInvalidate] = useState(true);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
+    // Publish xong nhưng purge cache hỏng: KHÔNG phải lỗi publish (file đã lên S3),
+    // nhưng cũng không được lặng lẽ đóng — app vẫn ăn bản cũ trong cache.
+    const [warn, setWarn] = useState<string | null>(null);
 
     useEffect(() => {
         s3.getObjectText(target.key).then(setCurrent).catch(() => setCurrent(''));
@@ -29,12 +32,17 @@ export function PushModal({ target, onClose, onDone }: Props) {
         setBusy(true);
         setErr(null);
         try {
-            await s3.publish(target.key, target.body, {
+            const res = await s3.publish(target.key, target.body, {
                 commitMessage: commit || 'Update layout',
                 bumpVersion: bump,
                 invalidateCdn: invalidate,
                 meta: target.meta
             });
+            if (res.cachePurged === false) {
+                setWarn(`Đã publish ${res.version} lên S3, NHƯNG xoá cache CDN hỏng — app có thể còn ăn bản cũ. Xoá cache tay rồi hãy báo QC.`);
+                setBusy(false);
+                return;
+            }
             onDone();
         } catch (e) {
             setErr(String((e as Error).message || e));
@@ -85,16 +93,23 @@ export function PushModal({ target, onClose, onDone }: Props) {
                     </label>
                     <label className="push-check">
                         <input type="checkbox" checked={invalidate} onChange={(e) => setInvalidate(e.target.checked)} />
-                        Invalidate CDN cache sau khi publish
+                        Xoá cache CDN sau khi publish (layout mới thì bỏ qua — chưa có gì để xoá)
                     </label>
 
                     {err && <div className="push-err">Lỗi: {err}</div>}
+                    {warn && <div className="push-warn">{warn}</div>}
                 </div>
                 <footer className="modal-foot">
-                    <button className="btn ghost sm" onClick={onClose}>Huỷ</button>
-                    <button className="btn primary sm" disabled={busy} onClick={publish}>
-                        {Icon.upload} {busy ? 'Đang publish…' : 'Publish'}
-                    </button>
+                    {warn ? (
+                        <button className="btn primary sm" onClick={onDone}>Đã hiểu, đóng</button>
+                    ) : (
+                        <>
+                            <button className="btn ghost sm" onClick={onClose}>Huỷ</button>
+                            <button className="btn primary sm" disabled={busy} onClick={publish}>
+                                {Icon.upload} {busy ? 'Đang publish…' : 'Publish'}
+                            </button>
+                        </>
+                    )}
                 </footer>
             </div>
         </div>

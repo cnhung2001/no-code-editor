@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
-import { objectUrl } from '../s3/publicUrl';
+import { objectUrl, s3DirectUrl } from '../s3/publicUrl';
 import { copyText } from '../lib/clipboard';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
@@ -40,7 +40,7 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
     useEffect(() => {
         let alive = true;
         if (!file.key) return;
-        s3.getObjectText(file.key)
+        s3.getObjectText(file.key, undefined, { preferDraft: true })
             .then(async (text) => {
                 if (!alive) return;
                 setRaw(text);
@@ -73,13 +73,23 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
         if (!v || !file.key) return;
         await s3.putObject(file.key, toSaveFormat(v), 'draft', extractMeta(v));
         setDirty(false);
-        flash(`Draft saved · s3://ik-nocode-paywall/${file.key}`);
+        flash('Đã lưu nháp · chưa lên bản live (nằm ở .drafts/)');
     }
 
+    // Layout chưa publish lần nào: link CDN của key thật là link CHẾT (chưa có
+    // object nào ở đó). Đưa đường dẫn S3 của bản nháp thay vì một URL 404 trông
+    // như thật — người ta copy nó đi dán vào remote_url là hỏng.
+    const draftUrl = file.draftKey ? s3DirectUrl(file.draftKey) : '';
+    const pathLabel = file.draftOnly
+        ? draftUrl || '—'
+        : file.key
+          ? objectUrl(file.key)
+          : '—';
+
     async function copyPath() {
-        if (!file.key) return;
+        if (!file.key && !file.draftKey) return;
         try {
-            await copyText(objectUrl(file.key));
+            await copyText(pathLabel);
             setCopied(true);
             window.clearTimeout(copyTimer.current);
             copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
@@ -145,10 +155,10 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         </header>
                         <div className="meta-modal-body">
                             <dl>
-                                <dt>S3 path</dt>
+                                <dt>{file.draftOnly ? 'Đường dẫn nháp' : 'S3 path'}</dt>
                                 <dd className="meta-copy">
-                                    <span>{file.key ? objectUrl(file.key) : '—'}</span>
-                                    {file.key && (
+                                    <span>{pathLabel}</span>
+                                    {(file.key || file.draftKey) && (
                                         <button
                                             className={`icon-btn${copied ? ' copied' : ''}`}
                                             title="Copy S3 path"
@@ -159,6 +169,21 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                                         </button>
                                     )}
                                 </dd>
+                                {file.draftOnly && (
+                                    <>
+                                        <dt>Bản live</dt>
+                                        <dd className="meta-warn">chưa publish — chưa có gì ở {objectUrl(file.key || '')}</dd>
+                                    </>
+                                )}
+                                {file.hasDraft && !file.draftOnly && (
+                                    <>
+                                        <dt>Bản nháp</dt>
+                                        <dd className="meta-warn">
+                                            đang mở bản nháp, chưa lên live<br />
+                                            <a href={draftUrl} target="_blank" rel="noreferrer">{draftUrl}</a>
+                                        </dd>
+                                    </>
+                                )}
                                 <dt>log_id</dt><dd>{raw ? extractLogId(raw) : '—'}</dd>
                                 <dt>Version</dt><dd>{file.version || '—'}</dd>
                                 <dt>Status</dt><dd>{file.status || '—'}</dd>

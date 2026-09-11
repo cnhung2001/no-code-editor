@@ -1,8 +1,11 @@
-import { render, createVariable, createGlobalVariablesController } from '@divkitframework/divkit/client-devtool';
+import {
+    render, createVariable, createGlobalVariablesController, evalExpression
+} from '@divkitframework/divkit/client-devtool';
 import type { CustomComponentDescription } from '@divkitframework/divkit/typings/custom';
 import type {
     CustomActionCallback, Direction, DivJson, DivVariable, StatCallback, WrappedError
 } from '@divkitframework/divkit/typings/common';
+import type { Variable, VariableType } from '@divkitframework/divkit/typings/variables';
 import { collectCustomComponents } from './customComponents';
 import { createDivExtensions } from './divExtensions';
 
@@ -146,6 +149,174 @@ interface Wrapper {
     variables?: { id?: string }[];
 }
 
+/**
+ * Giá trị thay cho biến mà host app cấp lúc chạy trên máy thật — "rỗng" của
+ * từng kiểu, không phải nội dung bịa: preview để xem layout, không phải để xem
+ * dữ liệu tưởng tượng. Ô nào trống thì đúng là chỗ app sẽ điền.
+ *
+ * Phải thử nhiều kiểu vì tên biến không nói lên kiểu, mà dùng sai kiểu thì
+ * expression vẫn hỏng y như lúc thiếu biến: `@{system_back_count > 0}` với
+ * chuỗi rỗng cho "Operator '>' cannot be applied to String and Integer", còn
+ * `getOptStringFromDict(…, locale_x, lang)` thì đòi dict. Thứ tự = độ phổ biến.
+ */
+const PLACEHOLDER_TYPES: { type: VariableType; value: unknown }[] = [
+    { type: 'string', value: '' },
+    { type: 'integer', value: 0 },
+    { type: 'number', value: 0 },
+    { type: 'boolean', value: false },
+    { type: 'dict', value: {} },
+    { type: 'array', value: [] }
+];
+
+/** Bao nhiêu biến thiếu chịu khó moi ra từ MỘT expression trước khi bỏ cuộc. */
+const MAX_MISSING_PER_EXPRESSION = 12;
+
+const MISSING_VARIABLE_RE = /^Variable '(.+?)' is missing\.$/;
+
+/** Mọi chuỗi có `@{…}` trong json — chính là thứ DivKit sẽ đem đi tính. */
+function collectExpressions(node: unknown, out: Set<string>): void {
+    if (Array.isArray(node)) {
+        for (const item of node) {
+            collectExpressions(item, out);
+        }
+        return;
+    }
+    if (!node || typeof node !== 'object') {
+        return;
+    }
+    for (const value of Object.values(node as Record<string, unknown>)) {
+        if (typeof value === 'string') {
+            if (value.includes('@{')) {
+                out.add(value);
+            }
+        } else {
+            collectExpressions(value, out);
+        }
+    }
+}
+
+/**
+ * Biến mà card TỰ khai báo ở cấp card.
+ *
+ * Chỉ cấp card, cố ý. `card.variables` bị bỏ qua nếu tên đó đã có sẵn trong
+ * bảng biến (Root.svelte: `!variables.has(name)`), nên bơm một global trùng tên
+ * sẽ NUỐT luôn khai báo thật của layout. Biến khai báo trên một div thì ngược
+ * lại — nó `set()` đè lên map của scope con, nên global trùng tên vô hại.
+ */
+function declaredCardVariables(json: DivJson): Map<string, Variable> {
+    const map = new Map<string, Variable>();
+    for (const variable of json.card?.variables || []) {
+        if (!variable?.name || !variable?.type) {
+            continue;
+        }
+        try {
+            // `property` là biến TÍNH RA (`value_type` + expression), không phải
+            // một trong 8 kiểu lưu trữ — createVariable không dựng được. Kiểu
+            // không quan trọng ở đây: map này chỉ để trả lời "tên đã có chưa".
+            const type = variable.type === 'property' ? 'string' : variable.type;
+            map.set(variable.name, createVariable(
+                variable.name,
+                type,
+                'value' in variable ? variable.value : undefined
+            ));
+        } catch {
+            // Khai báo hỏng (sai kiểu, thiếu value) — vẫn phải chiếm chỗ, nếu
+            // không tên này sẽ bị coi là "thiếu" rồi bơm global đè lên nó.
+            map.set(variable.name, createVariable(variable.name, 'string', ''));
+        }
+    }
+    return map;
+}
+
+/**
+ * Tên những biến mà expression của card đọc nhưng không nơi nào khai báo.
+ *
+ * Dùng chính parser của DivKit thay vì bắt tên bằng regex: `getOptStringFromDict`
+ * và `locale_i18n_greeting` nằm cạnh nhau trong cùng một expression, mà chỉ cái
+ * sau là biến. `evalExpression` đã biết đâu là hàm, đâu là biến, đâu là chuỗi —
+ * nó báo đúng tên còn thiếu, từng cái một, nên cứ tính lại sau mỗi lần bù.
+ */
+function findMissingVariables(
+    json: DivJson,
+    known: Map<string, Variable>
+): Map<string, { type: VariableType; value: unknown }> {
+    const expressions = new Set<string>();
+    collectExpressions(json, expressions);
+
+    const missing = new Map<string, { type: VariableType; value: unknown }>();
+    const pool = new Map(known);
+
+    const place = (name: string, index: number) => {
+        const pick = PLACEHOLDER_TYPES[index];
+        pool.set(name, createVariable(name, pick.type, pick.value));
+        missing.set(name, pick);
+    };
+
+    for (const expression of expressions) {
+        // Biến do CHÍNH expression này lòi ra. Chỉ những cái đó mới được phép
+        // đổi kiểu bên dưới: một biến đã chốt kiểu từ expression trước thì giữ
+        // nguyên, nếu không hai chỗ dùng cùng một biến sẽ giằng co nhau.
+        const introduced: string[] = [];
+
+        for (let i = 0; i < MAX_MISSING_PER_EXPRESSION; ++i) {
+            const result = evalExpression(expression, { variables: pool, type: 'json' });
+            if (result.type !== 'error') {
+                break;
+            }
+            const name = MISSING_VARIABLE_RE.exec(String(result.value))?.[1];
+            if (name) {
+                introduced.push(name);
+                place(name, 0);
+                continue;
+            }
+            // Hết biến thiếu mà vẫn lỗi: có thể do kiểu mình vừa đoán. Thử các
+            // kiểu còn lại, giữ cái nào làm expression chạy được.
+            if (!retypePlaceholder(expression, pool, introduced, place)) {
+                // Không phải chuyện kiểu (chia cho 0, hàm không tồn tại, layout
+                // sai thật) — để nguyên, engine sẽ báo đúng lỗi đó cho người dùng.
+                break;
+            }
+        }
+    }
+    return missing;
+}
+
+/**
+ * Đổi kiểu placeholder cho tới khi expression chạy được. `true` nếu đổi được.
+ *
+ * Tham lam từng biến một: đủ cho mọi trường hợp trong bucket hiện tại (mỗi
+ * expression chỉ có một biến host). Hai biến cùng cần đổi kiểu trong một
+ * expression thì chịu — và kết quả đúng bằng lúc chưa có hàm này, nên không mất gì.
+ */
+function retypePlaceholder(
+    expression: string,
+    pool: Map<string, Variable>,
+    introduced: string[],
+    place: (name: string, index: number) => void
+): boolean {
+    for (const name of introduced) {
+        const original = pool.get(name);
+        for (let index = 1; index < PLACEHOLDER_TYPES.length; ++index) {
+            const pick = PLACEHOLDER_TYPES[index];
+            let candidate: Variable;
+            try {
+                candidate = createVariable(name, pick.type, pick.value);
+            } catch {
+                continue;
+            }
+            pool.set(name, candidate);
+            if (evalExpression(expression, { variables: pool, type: 'json' }).type !== 'error') {
+                place(name, index);
+                return true;
+            }
+        }
+        if (original) {
+            pool.set(name, original);
+        }
+    }
+    return false;
+}
+
 let nextId = 0;
 
 export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance {
@@ -176,6 +347,26 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
         }
     }
 
+    // Biến do host app cấp lúc chạy trên máy thật (`name` mang sang từ màn trước,
+    // id người dùng, cờ A/B…). Tool render từng layout một, đứng riêng, nên chúng
+    // không tồn tại — và một expression đọc phải biến thiếu KHÔNG chỉ trả về
+    // rỗng: nó hỏng, `apply()` trả `undefined`, rồi `set_variable` gọi
+    // `setValue(undefined)` và DivKit NÉM "Incorrect variable value". Cú ném đó
+    // nằm trong `await` của action executor async nên không ai bắt được —
+    // onError không thấy, try/catch quanh render() cũng không — chỉ còn
+    // "Uncaught (in promise)" trong console, còn layout thì mất luôn phần chữ.
+    //
+    // Ba biến cố định bên trên đã theo đúng lối này rồi; đây là phần tổng quát
+    // hoá nó cho biến mà chỉ bản thân layout mới biết là mình cần.
+    const known = declaredCardVariables(json);
+    for (const variable of globalVariablesController.list()) {
+        known.set(variable.getName(), variable);
+    }
+    const stubbed = findMissingVariables(json, known);
+    for (const [name, pick] of stubbed) {
+        globalVariablesController.setVariable(createVariable(name, pick.type, pick.value));
+    }
+
     muteVideos(json);
     prepareTarget(opts.node);
 
@@ -197,6 +388,18 @@ export function renderCardPreview(opts: CardPreviewOptions): CardPreviewInstance
             opts.onError?.(event.error);
         }
     });
+
+    // Nói ra, đừng im lặng. Ô trống trên màn có thể là do layout sai, cũng có
+    // thể là do biến của app chưa có — hai chuyện khác hẳn nhau, và chỉ chỗ này
+    // biết là chuyện nào.
+    if (stubbed.size && opts.onError) {
+        const notice = new Error('Biến do app cấp, preview để trống') as PreviewError;
+        notice.level = 'warn';
+        notice.additional = {
+            variables: [...stubbed].map(([name, pick]) => `${name} (${pick.type})`).join(', ')
+        };
+        opts.onError(notice);
+    }
 
     const silence = keepSilent(opts.node);
 

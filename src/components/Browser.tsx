@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
-import { s3 } from '../s3';
+import { s3, peekList } from '../s3';
 import type { JsonKind } from '@divkitframework/visual-editor/dist/preview.js';
 import { useProjectPerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
@@ -55,37 +55,44 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         []
     );
 
+    // Huỷ, không chỉ bỏ qua. Cờ `alive` chặn được setState nhưng request vẫn
+    // chạy tới cùng: bấm qua năm tab là ~90 request rác còn đang bay, mà browser
+    // chỉ mở 6 kết nối/origin — request của tab ĐANG xem xếp hàng sau tất cả
+    // chúng. Đó là lý do đổi tab liên tục thì mỗi lần lại lâu hơn lần trước.
     useEffect(() => {
-        let alive = true;
-        setLoading(true);
+        const ac = new AbortController();
+        // Đã xem chỗ này rồi thì vẽ luôn, đừng bắt nhìn skeleton lần nữa. Vẫn
+        // tải lại ở dưới: người khác có thể vừa publish hoặc xoá gì đó.
+        const cached = peekList(prefix);
+        setItems(cached ?? []);
+        setLoading(!cached);
         setErr(null);
         setAssetsOpen(false);
-        s3.listPath(prefix)
-            .then((res) => alive && setItems(res))
-            .catch((e) => alive && setErr(String(e.message || e)))
-            .finally(() => alive && setLoading(false));
-        return () => {
-            alive = false;
-        };
+        s3.listPath(prefix, { signal: ac.signal })
+            .then((res) => !ac.signal.aborted && setItems(res))
+            .catch((e) => !ac.signal.aborted && setErr(String(e.message || e)))
+            .finally(() => !ac.signal.aborted && setLoading(false));
+        return () => ac.abort();
     }, [prefix]);
 
     const project = path[0] || '';
 
     useEffect(() => {
-        let alive = true;
-        setProjectFiles([]);
-        setProjectLoaded(false);
+        const ac = new AbortController();
+        const cachedFiles = project ? peekList(`${project}/`, true) : undefined;
+        setProjectFiles(cachedFiles ?? []);
+        // Có cache thì folder chỉ chứa asset được lọc ngay từ nhịp đầu, không
+        // hiện lên rồi biến mất.
+        setProjectLoaded(Boolean(cachedFiles));
         if (!project) return;
-        s3.listPath(`${project}/`, { recursive: true })
-            .then((res) => alive && setProjectFiles(res))
+        s3.listPath(`${project}/`, { recursive: true, signal: ac.signal })
+            .then((res) => !ac.signal.aborted && setProjectFiles(res))
             .catch(() => {
                 /* asset chỉ là phần phụ của lưới — lỗi ở đây không nên chặn view.
                    Không có danh sách thì không ẩn folder nào: thà thừa hơn thiếu. */
             })
-            .finally(() => alive && setProjectLoaded(true));
-        return () => {
-            alive = false;
-        };
+            .finally(() => !ac.signal.aborted && setProjectLoaded(true));
+        return () => ac.abort();
     }, [project]);
 
     const projectAssets = useMemo(
@@ -101,17 +108,24 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 
     const inProject = path.length >= 1;
     const searching = q.trim().length > 0;
-    // Danh sách prefix về trước danh sách đệ quy, mà chỉ danh sách sau mới biết
-    // folder nào chỉ chứa asset. Vẽ sớm là để folder assets nhấp nháy hiện lên
-    // rồi biến mất, nên shimmer giữ tới khi biết đủ để vẽ đúng một lần.
-    const gridLoading = loading || (inProject && !projectLoaded);
+    // Chỉ chờ danh sách prefix. Trước đây chờ cả danh sách đệ quy của CẢ project
+    // nữa, nên lưới nằm im sau skeleton dù dữ liệu để vẽ card đã về từ lâu.
+    const gridLoading = loading;
+    // Danh sách prefix về trước, mà chỉ danh sách đệ quy mới biết folder nào chỉ
+    // chứa asset. Cái phải hoãn vì vậy đúng là FOLDER, không phải cả lưới: vẽ
+    // sớm rồi rút đi là nhấp nháy, còn vẽ muộn chỉ là một mục xuất hiện thêm —
+    // và phần nặng của lưới (card layout + thumbnail) không phải chờ gì cả.
+    const foldersReady = !inProject || projectLoaded;
     // Khung chính chỉ có layout: bỏ file asset, và bỏ luôn những folder mà bên
     // trong không có layout nào (images/, videos/, anim/…) — asset đã có view
     // riêng gom cả project nên không mất gì.
     const nonAssets = useMemo(
-        () => filtered.filter((it) => !isAsset(it) &&
-            !(it.type === 'folder' && assetFolders.has(it.name))),
-        [filtered, assetFolders]
+        () => filtered.filter((it) => {
+            if (isAsset(it)) return false;
+            if (it.type !== 'folder') return true;
+            return foldersReady && !assetFolders.has(it.name);
+        }),
+        [filtered, assetFolders, foldersReady]
     );
     // Chỉ gom khi đang trong project và không tìm kiếm (tìm kiếm → phẳng để tìm cả asset).
     const grouped = inProject && !searching;
@@ -163,9 +177,13 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                             {/* Chỉ layout được push qua tool mới có metadata này; một
                                 animation Lottie hay ảnh thì không, nên đừng dán nhãn
                                 "Draft" cho thứ vốn không có vòng đời draft/live. */}
-                            {(it.status || it.version) && (
+                            {(it.status || it.version || it.hasDraft) && (
                                 <div className="card-foot">
                                     {it.status && <StatusBadge status={it.status} />}
+                                    {/* Có nháp chưa push: bản live vẫn là bản cũ, người mở
+                                        file sẽ thấy nháp — nói ra thay vì để họ đoán. */}
+                                    {it.hasDraft && !it.draftOnly && <span className="draft-flag">+ nháp</span>}
+                                    {it.draftOnly && <span className="draft-flag">chưa publish</span>}
                                     {it.version && <span className="ver">{it.version}</span>}
                                 </div>
                             )}

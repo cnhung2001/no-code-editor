@@ -53,7 +53,8 @@ export function Builder({ path, file, isNew, onBack, onPush }: Props) {
                 setValue(BLANK);
                 return;
             }
-            const text = await s3.getObjectText(file.key);
+            // Mở để SỬA → ưu tiên bản nháp. Không có nháp thì server trả bản live.
+            const text = await s3.getObjectText(file.key, undefined, { preferDraft: true });
             const res = await resolveAssets(text, project);
             if (alive) setValue(res);
         })().catch(() => alive && setValue(BLANK));
@@ -74,7 +75,8 @@ export function Builder({ path, file, isNew, onBack, onPush }: Props) {
         if (!v) return;
         await s3.putObject(key, toSaveFormat(v), 'draft', extractMeta(v));
         setDirty(false);
-        flash(`Draft saved · s3://ik-nocode-paywall/${key}`);
+        // Nói rõ nháp nằm ở đâu: nó KHÔNG phải file app đang đọc.
+        flash(`Đã lưu nháp · chưa lên bản live · s3://ik-nocode-paywall/${project}/.drafts/`);
     }
 
     function push() {
