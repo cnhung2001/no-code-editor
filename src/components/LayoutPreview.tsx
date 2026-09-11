@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
-import { objectUrl, S3_BUCKET } from '../s3/publicUrl';
+import { objectUrl, s3DirectUrl } from '../s3/publicUrl';
 import { copyText } from '../lib/clipboard';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
@@ -79,8 +79,9 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
     // Layout chưa publish lần nào: link CDN của key thật là link CHẾT (chưa có
     // object nào ở đó). Đưa đường dẫn S3 của bản nháp thay vì một URL 404 trông
     // như thật — người ta copy nó đi dán vào remote_url là hỏng.
+    const draftUrl = file.draftKey ? s3DirectUrl(file.draftKey) : '';
     const pathLabel = file.draftOnly
-        ? `s3://${S3_BUCKET}/${file.draftKey}`
+        ? draftUrl || '—'
         : file.key
           ? objectUrl(file.key)
           : '—';
@@ -171,14 +172,15 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                                 {file.draftOnly && (
                                     <>
                                         <dt>Bản live</dt>
-                                        <dd className="meta-warn">chưa publish — link CDN chưa sống</dd>
+                                        <dd className="meta-warn">chưa publish — chưa có gì ở {objectUrl(file.key || '')}</dd>
                                     </>
                                 )}
                                 {file.hasDraft && !file.draftOnly && (
                                     <>
                                         <dt>Bản nháp</dt>
                                         <dd className="meta-warn">
-                                            đang mở bản nháp, chưa lên live · s3://{S3_BUCKET}/{file.draftKey}
+                                            đang mở bản nháp, chưa lên live<br />
+                                            <a href={draftUrl} target="_blank" rel="noreferrer">{draftUrl}</a>
                                         </dd>
                                     </>
                                 )}
