@@ -24,7 +24,25 @@ import {
     CreateInvalidationCommand
 } from '@aws-sdk/client-cloudfront';
 import { authRouter } from './auth-routes.mjs';
-import { authenticate, requireAction } from './authz.mjs';
+import {
+    PROJECT_SCOPE,
+    RESOURCE,
+    SYSTEM_DOMAIN,
+    authenticate,
+    requireAction,
+    requireAuditRead,
+    requireSystemAdmin,
+    session
+} from './authz.mjs';
+import { DB_ENABLED, ensureSchema } from './db.mjs';
+import { auditMiddleware, search as searchAudit } from './audit.mjs';
+import { accessiblePrefixes } from './project-scope.mjs';
+import {
+    createProject,
+    deleteProject,
+    listMappings,
+    updateProject
+} from './projects-repo.mjs';
 
 const {
     PORT = 8080,
@@ -80,7 +98,27 @@ const API_WRITE_ACTIONS = [
     ['POST', /^\/translate$/, 'read'] // dịch không đổi gì trên S3
 ];
 
+/**
+ * Route "điều hướng": liệt kê gốc bucket. Không thuộc project nào, nhưng chặn
+ * bằng quyền system thì user chỉ có quyền theo project sẽ không đi đâu được.
+ * Chỉ cần đăng nhập; chính route tự lọc nội dung theo quyền (xem filterVisible).
+ */
+function isRootListing(req) {
+    if (req.method !== 'GET') return false;
+    return req.path === '/projects' || (req.path === '/list' && !req.query.prefix);
+}
+
 function apiActionGuard(req, res, next) {
+    if (isRootListing(req)) {
+        req.authzAction = 'read';
+        return next();
+    }
+    // /admin/* không thao tác trên layout nên không đi qua bảng action bên trên;
+    // mỗi route tự gate bằng requireSystemAdmin / requireAuditRead.
+    if (req.path.startsWith('/admin/')) {
+        req.authzAction = req.method === 'GET' ? 'admin-read' : 'admin-update';
+        return next();
+    }
     if (req.method === 'GET' || req.method === 'HEAD') {
         return requireAction('read')(req, res, next);
     }
@@ -91,8 +129,32 @@ function apiActionGuard(req, res, next) {
     return requireAction(hit[2])(req, res, next);
 }
 
-// Mọi /api/* còn lại: phải đăng nhập, rồi phải đủ quyền.
-app.use('/api', authenticate, apiActionGuard);
+// Mọi /api/* còn lại: phải đăng nhập, rồi phải đủ quyền, rồi ghi audit.
+// auditMiddleware đứng SAU guard để đọc được req.authzAction và status thật.
+app.use('/api', authenticate, apiActionGuard, auditMiddleware);
+
+/**
+ * Lọc danh sách folder ở gốc bucket theo quyền.
+ *
+ * Hai lời gọi authz, không phải một lời gọi cho mỗi folder: 17+ lần enforce mỗi
+ * lần mở app là không chấp nhận được.
+ *   1. có 'read' ở domain '*' (role system) → thấy tất cả
+ *   2. không thì giao mapping với slug project của user
+ */
+async function visiblePrefixes(userId) {
+    if (PROJECT_SCOPE !== 'on') return null; // null = không lọc
+
+    const systemRead = await session
+        .enforce({ userId, resource: RESOURCE, action: 'read', domain: SYSTEM_DOMAIN })
+        .catch(() => false);
+    if (systemRead) return null;
+
+    const [mappings, slugs] = await Promise.all([
+        listMappings(),
+        session.getProjectSlugs(userId).catch(() => [])
+    ]);
+    return accessiblePrefixes(mappings, slugs);
+}
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
 const kind = (key) => {
@@ -147,11 +209,15 @@ async function streamToString(stream) {
 }
 
 // ── List project (common prefixes ở root, bỏ qua file lẻ) ──────────────────
-app.get('/api/projects', async (_req, res) => {
+app.get('/api/projects', async (req, res) => {
     try {
+        const visible = await visiblePrefixes(req.authzUser.id);
         const out = await s3.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Delimiter: '/' }));
+        const allowed = (out.CommonPrefixes || []).filter(
+            (p) => !visible || visible.has(p.Prefix.replace(/\/$/, ''))
+        );
         const projects = await Promise.all(
-            (out.CommonPrefixes || []).map(async (p) => {
+            allowed.map(async (p) => {
                 const name = p.Prefix.replace(/\/$/, '');
                 let layoutCount = 0;
                 try {
@@ -206,15 +272,23 @@ app.get('/api/list', async (req, res) => {
             return res.json(files);
         }
 
+        // Chỉ lọc ở GỐC bucket: vào trong project rồi thì guard đã chặn từ trước,
+        // và mọi thư mục con đều thuộc cùng project đó.
+        const visible = prefix ? null : await visiblePrefixes(req.authzUser.id);
         const out = await s3.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, Delimiter: '/' }));
-        const folders = (out.CommonPrefixes || []).map((p) => ({
-            name: p.Prefix.replace(prefix, '').replace(/\/$/, ''),
-            type: 'folder',
-            prefix: p.Prefix
-        }));
+        const folders = (out.CommonPrefixes || [])
+            .filter((p) => !visible || visible.has(p.Prefix.replace(/\/$/, '')))
+            .map((p) => ({
+                name: p.Prefix.replace(prefix, '').replace(/\/$/, ''),
+                type: 'folder',
+                prefix: p.Prefix
+            }));
         const files = await Promise.all(
             (out.Contents || [])
                 .filter((o) => o.Key !== prefix) // bỏ marker folder
+                // File lẻ ở gốc bucket không thuộc project nào; người chỉ có quyền
+                // theo project không được thấy chúng.
+                .filter((o) => !visible)
                 .map(async (o) => {
                     const name = o.Key.replace(prefix, '');
                     let t = kind(o.Key);
@@ -291,13 +365,17 @@ function buildMeta(base, meta) {
 app.put('/api/object', async (req, res) => {
     const { key, body, status, meta } = req.body;
     try {
-        await s3.send(new PutObjectCommand({
+        const out = await s3.send(new PutObjectCommand({
             Bucket: S3_BUCKET,
             Key: key,
             Body: body,
             ContentType: 'application/json',
             Metadata: buildMeta(status ? { status } : {}, meta)
         }));
+        // Bucket bật versioning → giữ VersionId là đủ để sau này dựng lại đúng
+        // nội dung trước/sau, không cần nhồi cả body layout vào DB audit.
+        res.locals.s3VersionId = out.VersionId ?? null;
+        res.locals.auditDetail = { status: status ?? 'draft', bytes: Buffer.byteLength(body || '') };
         res.json({ ok: true });
     } catch (e) {
         res.status(500).send(String(e.message || e));
@@ -309,7 +387,11 @@ app.delete('/api/object', async (req, res) => {
     const key = req.query.key;
     if (!key) return res.status(400).send('thiếu key');
     try {
-        await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        const out = await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        // Bucket bật versioning ⇒ đây là delete marker, bản cũ vẫn còn. VersionId
+        // của marker cho phép khôi phục bằng cách xoá đúng marker đó.
+        res.locals.s3VersionId = out.VersionId ?? null;
+        res.locals.auditDetail = { deleteMarker: Boolean(out.DeleteMarker) };
         res.json({ ok: true });
     } catch (e) {
         res.status(500).send(String(e.message || e));
@@ -323,12 +405,16 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (!project || !file) return res.status(400).send('thiếu project hoặc file');
     const key = `${project}/assets/${file.originalname}`;
     try {
-        await s3.send(new PutObjectCommand({
+        const out = await s3.send(new PutObjectCommand({
             Bucket: S3_BUCKET,
             Key: key,
             Body: file.buffer,
             ContentType: file.mimetype
         }));
+        // Enforce bằng quyền 'update', nhưng log là 'upload' cho dễ đọc lại.
+        res.locals.auditAction = 'upload';
+        res.locals.s3VersionId = out.VersionId ?? null;
+        res.locals.auditDetail = { fileName: file.originalname, bytes: file.size, key };
         // Trả về URL tương đối để JSON lưu gọn (client resolve qua presign/CDN)
         res.json({ url: `assets/${file.originalname}`, key });
     } catch (e) {
@@ -362,7 +448,7 @@ app.post('/api/publish', async (req, res) => {
         }
 
         // 3. Ghi bản publish (status=live)
-        await s3.send(new PutObjectCommand({
+        const put = await s3.send(new PutObjectCommand({
             Bucket: S3_BUCKET,
             Key: key,
             Body: body,
@@ -374,6 +460,12 @@ app.post('/api/publish', async (req, res) => {
                 'published-at': new Date().toISOString()
             }, meta)
         }));
+        res.locals.s3VersionId = put.VersionId ?? null;
+        res.locals.auditDetail = {
+            version: nextVersion,
+            commitMessage: commitMessage.slice(0, 256),
+            bytes: Buffer.byteLength(body || '')
+        };
 
         // 4. Invalidate CloudFront
         if (invalidateCdn && cf) {
@@ -493,6 +585,86 @@ function effectiveMtProvider() {
     return 'stub';
 }
 
+// ── Admin: mapping folder bucket ↔ project authz ──────────────────────────
+// Tên folder không trùng slug authz nên mapping là dữ liệu nhập tay. Quan hệ
+// nhiều-nhiều: một folder thường ứng với prod + debug + iOS + Android.
+
+function requireDb(_req, res, next) {
+    if (!DB_ENABLED) return res.status(503).json({ error: 'Chưa cấu hình Postgres' });
+    next();
+}
+
+app.get('/api/admin/projects', requireDb, requireSystemAdmin, async (_req, res) => {
+    try {
+        // Trả kèm danh sách folder thật trong bucket để UI chỉ ra folder nào
+        // chưa được map — đó chính là những folder sẽ bị khoá khi bật scope.
+        const [mappings, out] = await Promise.all([
+            listMappings(),
+            s3.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Delimiter: '/' }))
+        ]);
+        const bucketPrefixes = (out.CommonPrefixes || []).map((p) => p.Prefix.replace(/\/$/, ''));
+        res.json({ mappings, bucketPrefixes, scope: PROJECT_SCOPE });
+    } catch (e) {
+        res.status(500).json({ error: String(e.message || e) });
+    }
+});
+
+app.post('/api/admin/projects', requireDb, requireSystemAdmin, async (req, res) => {
+    const { bucketPrefix, displayName, authzSlugs } = req.body || {};
+    if (!bucketPrefix) return res.status(400).json({ error: 'thiếu bucketPrefix' });
+    try {
+        const id = await createProject({
+            bucketPrefix: String(bucketPrefix).replace(/\/$/, ''),
+            displayName,
+            authzSlugs: Array.isArray(authzSlugs) ? authzSlugs : []
+        });
+        res.json({ ok: true, id });
+    } catch (e) {
+        res.status(500).json({ error: String(e.message || e) });
+    }
+});
+
+app.patch('/api/admin/projects/:id', requireDb, requireSystemAdmin, async (req, res) => {
+    const { displayName, isActive, authzSlugs } = req.body || {};
+    try {
+        await updateProject(Number(req.params.id), {
+            displayName,
+            isActive,
+            authzSlugs: Array.isArray(authzSlugs) ? authzSlugs : undefined
+        });
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: String(e.message || e) });
+    }
+});
+
+app.delete('/api/admin/projects/:id', requireDb, requireSystemAdmin, async (req, res) => {
+    try {
+        await deleteProject(Number(req.params.id));
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: String(e.message || e) });
+    }
+});
+
+// ── Admin: audit log ──────────────────────────────────────────────────────
+app.get('/api/admin/audit', requireDb, requireAuditRead, async (req, res) => {
+    try {
+        const rows = await searchAudit({
+            project: req.query.project,
+            userEmail: req.query.user,
+            action: req.query.action,
+            from: req.query.from,
+            to: req.query.to,
+            limit: req.query.limit,
+            offset: req.query.offset
+        });
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: String(e.message || e) });
+    }
+});
+
 // Thông tin provider MT hiện tại (để UI hiển thị/nhận biết stub vs thật).
 app.get('/api/translate/info', (_req, res) => {
     res.json({ provider: effectiveMtProvider() });
@@ -518,19 +690,21 @@ if (IS_DEV) {
     app.get('*', (_req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')));
 }
 
+// Schema sync trước khi nhận request: guard đọc bảng mapping ngay từ request
+// đầu tiên, mà /healthz thì không cần DB nên listen sớm cũng không lợi gì.
+// DB hỏng KHÔNG chặn boot — authz.mjs đã tự hạ scope về 'off' khi thiếu DB.
+await ensureSchema().catch((err) => {
+    console.warn('[db] ensureSchema hỏng:', err.message);
+});
+
 const server = app.listen(Number(PORT), () => {
-    // Banner nhiều dòng thay vì một dòng dài: dòng đầu là URL DUY NHẤT cần mở,
-    // vì log này chạy cạnh log của Vite (cổng Vite mở trực tiếp sẽ hỏng).
-    console.log([
-        '',
-        `  NoCode Preview  ${IS_DEV ? 'dev' : 'production'}`,
-        '',
-        `  ➜  App:      http://localhost:${PORT}   ← mở URL này`,
-        `  ➜  Frontend: ${IS_DEV ? `proxy → ${VITE_DEV_URL}` : `static ← ${DIST_DIR}`}`,
-        `  ➜  Bucket:   ${S3_BUCKET} (${AWS_REGION})`,
-        `  ➜  Authz:    ${process.env.AUTHZ_SYSTEM_CODE || '(chưa cấu hình)'}  ·  MT: ${effectiveMtProvider()}`,
-        ''
-    ].join('\n'));
+    console.log(
+        `NoCode Preview → http://localhost:${PORT}  ` +
+        `(bucket: ${S3_BUCKET}, region: ${AWS_REGION}) · MT=${effectiveMtProvider()} · ` +
+        `authz=${process.env.AUTHZ_SYSTEM_CODE} · projectScope=${PROJECT_SCOPE} · ` +
+        `db=${DB_ENABLED ? 'on' : 'off'} · ` +
+        `${IS_DEV ? `dev proxy → ${VITE_DEV_URL}` : `static ← ${DIST_DIR}`}`
+    );
 });
 
 // ws:true chỉ tự đăng ký upgrade sau request HTTP đầu tiên; wire tay để HMR

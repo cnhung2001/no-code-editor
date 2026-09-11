@@ -1,0 +1,48 @@
+# Postgres của NoCode Editor — mapping project + audit log.
+#
+# ⚠ Dựng MỘT LẦN và để chạy liên tục. KHÔNG nằm trong vòng blue-green: deploy.sh
+#   hạ container app màu cũ sau mỗi lần deploy, và lúc chuyển màu có hai app
+#   cùng chạy — DB phải sống độc lập với cả hai.
+#
+#   docker compose -p nocode-db -f docker-compose.db.yml up -d
+#
+# Không map port ra host: chỉ container trên bmik_net nói chuyện được với nó.
+# Muốn vào bằng psql thì `docker exec -it nocode-db psql -U nocode nocode_editor`.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nocode-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nocode}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD trong ./.env}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-nocode_editor}
+      # Khoá initdb về C.UTF-8 để index text không đổi hành vi nếu sau này
+      # image đổi locale mặc định.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nocode} -d ${POSTGRES_DATABASE:-nocode_editor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      edge: {}
+
+volumes:
+  # Named volume: `docker compose down` không xoá, nên audit log sống qua mọi
+  # lần deploy. Xoá volume này là mất toàn bộ lịch sử audit — không có backup.
+  pgdata:
+    name: nocode_pgdata
+
+networks:
+  edge:
+    external: true
+    name: bmik_net

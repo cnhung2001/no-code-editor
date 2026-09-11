@@ -11,17 +11,22 @@ import {
 } from '@ikameglobal/authz-sdk/common';
 import {
     ACTIONS,
-    DOMAIN,
+    PROJECT_SCOPE,
     REDIRECT_URI,
     RESOURCE,
+    SYSTEM_DOMAIN,
     authenticate,
     authz,
     cookies,
     cookieWriter,
+    enforceInProject,
+    isSystemAdmin,
     readAccessToken,
     sendAuthzError,
     session
 } from './authz.mjs';
+import { recordAuth } from './audit.mjs';
+import { resolveBucketPrefix } from './project-scope.mjs';
 
 // Nhớ trang user đang đứng trước khi bị bật ra login. Ngắn hạn, httpOnly.
 const NEXT_COOKIE = 'auth_next';
@@ -65,8 +70,10 @@ authRouter.get('/auth/callback', async (req, res) => {
         // → request /api/me ngay sau redirect không bị "admin trông như viewer".
         await fetchRoleSignals(session, user.id);
 
+        recordAuth(req, { action: 'login', outcome: 'allow', user });
         res.redirect(next);
     } catch (err) {
+        recordAuth(req, { action: 'login', outcome: 'error' });
         res.redirect(`/?auth_error=${formatErrorCodeForRedirect(err)}`);
     }
 });
@@ -84,23 +91,29 @@ authRouter.post('/auth/logout', async (req, res) => {
         // Revoke là best-effort: authz không phản hồi thì vẫn phải clear cookie.
         onError: (err) => console.warn('[authz] revoke thất bại:', err?.message || err)
     });
+    // Không có req.authzUser (route này không qua `authenticate`) — logout phải
+    // chạy được cả khi token đã chết, nên chỉ ghi được sự kiện, không ghi ai.
+    recordAuth(req, { action: 'logout', outcome: 'allow' });
     res.json({ ok: true });
 });
 
 // ── GET /api/me ──
-// Endpoint duy nhất frontend dùng để biết "tôi là ai" và "tôi được làm gì".
+// "Tôi là ai" + quyền CẤP SYSTEM. Quyền trong từng project hỏi riêng qua
+// /api/me/perms — không gộp vào đây vì user có thể có quyền ở 17 folder khác
+// nhau, resolve hết mỗi lần load app là 17×4 lần enforce.
 // Quyền resolve live từ casbin mỗi lần gọi — token KHÔNG chứa role.
 authRouter.get('/api/me', authenticate, async (req, res) => {
     try {
         const user = req.authzUser;
-        const [perms, roles] = await Promise.all([
+        const [perms, roles, systemAdmin] = await Promise.all([
             session.resolveContentPermissions({
                 userId: user.id,
                 resource: RESOURCE,
-                domain: DOMAIN,
+                domain: SYSTEM_DOMAIN,
                 actions: ACTIONS
             }),
-            session.getRoles(user.id).catch(() => [])
+            session.getRoles(user.id).catch(() => []),
+            isSystemAdmin(user.id).catch(() => false)
         ]);
 
         res.json({
@@ -114,8 +127,45 @@ authRouter.get('/api/me', authenticate, async (req, res) => {
             },
             roles,
             resource: RESOURCE,
-            perms
+            perms,
+            // Frontend cần biết đang ở chế độ nào để không hiển thị quyền project
+            // khi backend vẫn quyết định theo system.
+            projectScope: PROJECT_SCOPE,
+            // Chỉ để ẩn/hiện mục Admin. Hỏi bằng ROLE chứ không suy từ perms:
+            // `no-code-editor:admin` không có `update` trên :layout, suy từ perms
+            // sẽ giấu mục Admin khỏi đúng người cần nó.
+            isSystemAdmin: systemAdmin
         });
+    } catch (err) {
+        sendAuthzError(res, err);
+    }
+});
+
+// ── GET /api/me/perms?project=<bucket prefix> ──
+// Quyền của user trong đúng một folder bucket. UI gọi khi mở project để biết
+// nút Save/Push/Delete có hiện hay không.
+authRouter.get('/api/me/perms', authenticate, async (req, res) => {
+    const { prefix, invalid } = resolveBucketPrefix(req);
+    if (invalid) return res.status(400).json({ error: 'project không hợp lệ' });
+
+    try {
+        const user = req.authzUser;
+
+        // Chưa bật scope, hoặc hỏi ở gốc bucket → quyền chính là quyền system.
+        if (PROJECT_SCOPE !== 'on' || prefix === null) {
+            const perms = await session.resolveContentPermissions({
+                userId: user.id,
+                resource: RESOURCE,
+                domain: SYSTEM_DOMAIN,
+                actions: ACTIONS
+            });
+            return res.json({ project: prefix, scoped: false, perms });
+        }
+
+        const results = await Promise.all(
+            ACTIONS.map(async (action) => [action, await enforceInProject(user.id, action, prefix)])
+        );
+        res.json({ project: prefix, scoped: true, perms: Object.fromEntries(results) });
     } catch (err) {
         sendAuthzError(res, err);
     }

@@ -21,9 +21,21 @@ interface Props {
     onProject(name: string): void;
     onFile(item: S3Item): void;
     onRoot(): void;
+    /** Quyền cấp system — chỉ để ẩn/hiện mục Admin, backend vẫn tự gate. */
+    canAdmin?: boolean;
+    onAdmin?(): void;
 }
 
-export function Sidebar({ projects, files, activeProject, onProject, onFile, onRoot }: Props) {
+export function Sidebar({
+    projects,
+    files,
+    activeProject,
+    onProject,
+    onFile,
+    onRoot,
+    canAdmin,
+    onAdmin
+}: Props) {
     return (
         <aside className="sidebar">
             <button className="brand" onClick={onRoot}>
@@ -48,6 +60,9 @@ export function Sidebar({ projects, files, activeProject, onProject, onFile, onR
                 {projects.map((p) => (
                     <button
                         key={p.name}
+                        // Tên dài bị cắt bằng ellipsis → title là cách duy nhất
+                        // đọc được tên đầy đủ.
+                        title={p.name}
                         className={'tree-item' + (activeProject === p.name ? ' active' : '')}
                         onClick={() => onProject(p.name)}
                     >
@@ -66,6 +81,7 @@ export function Sidebar({ projects, files, activeProject, onProject, onFile, onR
                         {files.map((f) => (
                             <button
                                 key={f.key || f.name}
+                                title={f.name}
                                 className="tree-item"
                                 onClick={() => onFile(f)}
                             >
@@ -78,6 +94,12 @@ export function Sidebar({ projects, files, activeProject, onProject, onFile, onR
             )}
 
             <div className="sidebar-foot">
+                {canAdmin && onAdmin && (
+                    <button className="tree-item admin-link" onClick={onAdmin}>
+                        <span className="tree-ic">{Icon.settings}</span>
+                        <span className="tree-name">Admin</span>
+                    </button>
+                )}
                 <UserMenu />
             </div>
         </aside>

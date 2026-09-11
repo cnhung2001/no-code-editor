@@ -9,7 +9,7 @@ import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
 import { resolveAssets } from '../editor/resolveAssets';
 import { toSaveFormat, extractLogId, extractMeta } from '../editor/wrapper';
-import { usePerms } from '../auth/AuthContext';
+import { useProjectPerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
 import { Loader } from './Loader';
 import { PreviewModal } from './modals/PreviewModal';
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function LayoutPreview({ path, file, onBack, onPush }: Props) {
-    const perms = usePerms();
+    const perms = useProjectPerms(path[0]);
     const project = path[0] || '';
     const editorRef = useRef<DivEditorHandle>(null);
     const [raw, setRaw] = useState<string>('');

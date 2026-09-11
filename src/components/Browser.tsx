@@ -5,6 +5,7 @@ import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
 import { usePerms } from '../auth/AuthContext';
 import type { JsonKind } from '@divkitframework/visual-editor/dist/preview.js';
+import { useProjectPerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
 import { JsonThumb } from './JsonThumb';
@@ -32,7 +33,7 @@ interface Props {
 }
 
 export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
-    const perms = usePerms();
+    const perms = useProjectPerms(path[0]);
     const prefix = path.length ? path.join('/') + '/' : '';
     const [items, setItems] = useState<S3Item[]>([]);
     const [loading, setLoading] = useState(true);

@@ -7,7 +7,7 @@ import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
 import { resolveAssets } from '../editor/resolveAssets';
 import { toSaveFormat, extractMeta } from '../editor/wrapper';
-import { usePerms } from '../auth/AuthContext';
+import { useProjectPerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
 
 const BLANK = JSON.stringify({
@@ -38,7 +38,7 @@ interface Props {
 }
 
 export function Builder({ path, file, isNew, onBack, onPush }: Props) {
-    const perms = usePerms();
+    const perms = useProjectPerms(path[0]);
     const project = path[0] || '';
     const editorRef = useRef<DivEditorHandle>(null);
     const [name, setName] = useState(isNew ? 'untitled_layout' : (file?.name.replace(/\.json$/, '') || 'layout'));

@@ -11,17 +11,24 @@ export interface TranslateOpts {
     maxLength?: number;
 }
 
-/** Dịch `text` (ngôn ngữ `from`) sang danh sách `targets`. Trả { locale: text }. */
+/**
+ * Dịch `text` (ngôn ngữ `from`) sang danh sách `targets`. Trả { locale: text }.
+ *
+ * `project` là folder bucket đang mở. Bắt buộc gửi kèm khi bật phân quyền theo
+ * project: backend scope quyền theo nó, thiếu thì request rơi về scope system và
+ * người chỉ có quyền trong project sẽ bị 403 ngay ở nút Localize.
+ */
 export async function translate(
     text: string,
     from: string,
     targets: string[],
+    project?: string,
     opts?: TranslateOpts
 ): Promise<Record<string, string>> {
     const res = await fetch(`${BASE}/translate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text, from, targets, ...opts })
+        body: JSON.stringify({ text, from, targets, project, ...opts })
     });
     await assertAuthorized(res);
     if (!res.ok) {

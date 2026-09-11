@@ -8,10 +8,12 @@ import { Loader } from './components/Loader';
 // Editor nặng → tách chunk, chỉ tải khi vào Preview/Builder
 const LayoutPreview = lazy(() => import('./components/LayoutPreview').then((m) => ({ default: m.LayoutPreview })));
 const Builder = lazy(() => import('./components/Builder').then((m) => ({ default: m.Builder })));
+// Màn admin chỉ vài người mở → tách chunk, không nằm trong bundle chính.
+const AdminScreen = lazy(() => import('./admin/AdminScreen').then((m) => ({ default: m.AdminScreen })));
 import { HtmlModal } from './components/modals/HtmlModal';
 import { PushModal } from './components/modals/PushModal';
 import { s3, IS_MOCK } from './s3';
-import { AuthProvider, useAuth, usePerms } from './auth/AuthContext';
+import { AuthProvider, useAuth, useProjectPerms } from './auth/AuthContext';
 import { LoginScreen } from './auth/LoginScreen';
 import { buildUrl, parseUrl } from './lib/route';
 import type { ProjectInfo, S3Item, LayoutMeta } from './types';
@@ -50,10 +52,18 @@ function AuthGate() {
 }
 
 function Shell() {
-    const perms = usePerms();
     const [projects, setProjects] = useState<ProjectInfo[]>([]);
     const [rootFiles, setRootFiles] = useState<S3Item[]>([]);
     const [path, setPath] = useState<string[]>([]);
+    // Quyền theo project đang mở — phải khai báo SAU `path`.
+    const perms = useProjectPerms(path[0]);
+    // Mục Admin gate theo ROLE, không theo perms trên :layout — `admin` của
+    // system này không có `update` ở đó. Backend gate độc lập, ẩn nút không
+    // phải là phân quyền.
+    const { isSystemAdmin } = useAuth();
+    // Admin nằm ngoài routing theo URL: nó không phải một vị trí trong bucket,
+    // và nhét vào đó sẽ làm rối phần đồng bộ URL↔state bên dưới.
+    const [showAdmin, setShowAdmin] = useState(false);
     const [view, setView] = useState<View>('browser');
     const [activeFile, setActiveFile] = useState<S3Item | null>(null);
     const [isNew, setIsNew] = useState(false);
@@ -246,6 +256,16 @@ function Shell() {
           ? 'Sửa & lưu draft được · không có quyền publish'
           : null;
 
+    if (showAdmin) {
+        return (
+            <div className="nc-app nc-app--no-sidebar">
+                <Suspense fallback={<Loader label="Đang tải Admin…" />}>
+                    <AdminScreen onBack={() => setShowAdmin(false)} />
+                </Suspense>
+            </div>
+        );
+    }
+
     return (
         <div className={'nc-app' + (view !== 'browser' ? ' nc-app--no-sidebar' : '')}>
             {view === 'browser' && (
@@ -256,6 +276,8 @@ function Shell() {
                     onProject={gotoProject}
                     onFile={openItem}
                     onRoot={gotoRoot}
+                    canAdmin={isSystemAdmin}
+                    onAdmin={() => setShowAdmin(true)}
                 />
             )}
 

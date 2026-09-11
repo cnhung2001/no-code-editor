@@ -174,7 +174,7 @@ ssh <host> 'cd ~/project/no-code && cp .env.example .env && chmod 600 .env'
 ssh <host> 'nano ~/project/no-code/.env'    # điền hết __FILL__
 ```
 
-Cần điền: `AUTHZ_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+Cần điền: `AUTHZ_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `POSTGRES_PASSWORD`.
 `NOCODE_IMAGE` để nguyên `…/ik-nocode-editor:prod` — tag di động, đặt một lần rồi
 không đụng lại ở các lần deploy sau (xem bước 3).
 
@@ -224,16 +224,65 @@ Khác gì với hướng dẫn mặc định của AWS console:
 
 ---
 
+## Postgres — `deploy.sh` tự lo
+
+**Không có bước tay nào.** `deploy.sh` chạy `docker compose -p nocode-db -f docker-compose.db.yml
+up -d` ở **mỗi** lần deploy (bước `[0/5]`), chờ container healthy rồi mới đụng tới app.
+`up -d` là idempotent: DB đang chạy thì lệnh không làm gì.
+
+Cố ý làm ở mỗi lần deploy chứ không phải một bước tay làm-một-lần: quên bước tay đó thì app
+tự hạ về `db=off`, phân quyền theo project ngừng hoạt động **mà không báo gì** — đúng kiểu
+lỗi im lặng khó truy nhất.
+
+Điều kiện kích hoạt: `.env` có dòng `POSTGRES_HOST=`. Không có thì `deploy.sh` bỏ qua DB và
+app chạy như cũ (không phân quyền project, không audit).
+
+Có một chốt chặn: `.env` khai `AUTHZ_PROJECT_SCOPE=shadow|on` nhưng **thiếu** `POSTGRES_HOST`
+thì `deploy.sh` **dừng ngay**, không deploy — vì tổ hợp đó là bật phân quyền rồi để nó âm
+thầm không chạy. Postgres không healthy trong 60s cũng dừng, app màu cũ giữ nguyên.
+
+### Vì sao là compose project riêng (`-p nocode-db`)
+
+DB nằm ngoài vòng blue-green: `deploy.sh` hạ container app màu cũ sau mỗi lần deploy, và lúc
+chuyển màu có hai app cùng chạy — DB phải sống độc lập với cả hai.
+
+Không gộp vào `docker-compose.proxy.yml` của bmik (nơi `redis` đang ở) dù file đó cũng là
+"shared stateful stack": ai đó chạy `docker compose -p bmik-proxy ... down` để bảo trì proxy
+sẽ kéo theo DB của NoCode. Khác với `redis` — thứ nhiều app dùng chung thật — Postgres này là
+kho dữ liệu riêng của một app. Project riêng giữ đúng tinh thần "hai app deploy độc lập nhau".
+
+### Thao tác tay khi cần
+
+```bash
+docker exec -it nocode-db psql -U nocode nocode_editor    # vào psql
+docker compose -p nocode-db -f docker-compose.db.yml logs -f
+docker compose -p nocode-db -f docker-compose.db.yml down  # KHÔNG kèm -v
+```
+
+Không map port ra host — chỉ container trên `bmik_net` nói chuyện được.
+
+**Schema tự sync lúc app boot** — không có file migration. App chạy `CREATE TABLE IF NOT
+EXISTS` trong `pg_advisory_lock` mỗi lần khởi động. Thêm bảng/cột thì tự động; **đổi tên
+hoặc xoá cột vẫn phải làm tay** trên DB.
+
+⚠ Volume `nocode_pgdata` giữ toàn bộ audit log và **không có backup tự động**. `down` không
+xoá nó, `down -v` thì có — đừng bao giờ dùng cờ `-v` ở đây.
+
+Kiểm nhanh app đã thấy DB chưa: dòng log khởi động có `db=on|off` và `projectScope=...`.
+
+---
+
 ## Bước 4 — Deploy
 
 ```bash
 ssh <host> 'bash ~/project/no-code/deploy.sh'
 ```
 
-Flow: login ECR → up màu idle (`--pull always`) → chờ `/healthz` healthy →
-render `../sites/no-code.caddy` → `caddy reload` → ghi `active-color` → tắt màu cũ.
+Flow: dựng/kiểm Postgres → login ECR → up màu idle (`--pull always`) → chờ `/healthz`
+healthy → render `../sites/no-code.caddy` → `caddy reload` → ghi `active-color` → tắt màu cũ.
 
 Health fail ⇒ tự rollback: hạ màu mới, giữ màu cũ đang serve, in healthcheck log + 50 dòng app log.
+Postgres không lên được cũng dừng ngay ở bước `[0/5]`, chưa đụng gì tới app đang chạy.
 
 **Rollback thủ công**: sửa `NOCODE_IMAGE` trong `.env` từ `:prod` sang tag SHA cũ
 (`aws ecr describe-images --repository-name ik-nocode-editor --region ap-southeast-1`
@@ -281,3 +330,64 @@ nút Localize trả tiếng thật chứ không phải `[vi] text` (MT đúng).
 
 Đổi tên miền ⇒ phải sửa **3 chỗ**: `Caddyfile.tmpl`, và `APP_BASE_URL` + `AUTHZ_REDIRECT_URI` trong `.env`.
 Sót một chỗ là auth gãy.
+
+---
+
+## Phân quyền theo project
+
+`AUTHZ_PROJECT_SCOPE` trong `./.env` nhận ba giá trị:
+
+| Giá trị | Hành vi |
+|---|---|
+| `off` | Quyết định ở Casbin domain `*` — hành vi cũ. **Mặc định.** |
+| `shadow` | Vẫn quyết định như `off`, nhưng ghi vào `audit_logs` (`outcome='shadow-allow'`) những request **đang bị chặn** mà bật `on` sẽ cho qua. |
+| `on` | Quyết định theo domain `project:<slug>`. |
+
+### Bật `on` không lấy đi quyền của ai
+
+`enforceActionAcrossProjects` dò các domain `project:<slug>` **và** domain `*`, nên tập quyền
+ở `on` là tập cha của tập quyền ở `off`. Đã kiểm trên hệ thống thật: folder `printer` chưa map,
+scope `on`, tài khoản role `admin` vẫn `read:true`. Cái `on` thêm vào là **đường vào cho thành
+viên project**; nó không thu hẹp quyền của ai.
+
+Muốn thực sự giới hạn một người theo project thì phải **gỡ role system của họ** bên authz —
+cờ này không làm thay được.
+
+### Điều kiện trước khi bật `on` cho có ích
+
+**1. authz phải có p-rule cho role project trên `no-code-editor:layout`.** Kiểm:
+
+```sql
+select v0 as sub, v3 as act from casbin_rule
+ where ptype='p' and v2='no-code-editor:layout' and v0 like 'project:%';
+```
+
+Rỗng ⇒ bật `on` **không có tác dụng gì**: `enforce` ở domain project luôn `false`, mọi quyết
+định rơi về domain `*` y như `off`. Không hỏng, chỉ vô ích. Cần authz thêm:
+
+```
+p, project:owner,  *, no-code-editor:layout, read | update | publish | delete
+p, project:admin,  *, no-code-editor:layout, read | update | publish | delete
+p, project:editor, *, no-code-editor:layout, read | update | publish
+p, project:viewer, *, no-code-editor:layout, read
+```
+
+**2. Mọi folder trong bucket đã được map** ở màn Admin → tab "Phân quyền project".
+Folder chưa map thì thành viên project không có đường vào; người có role cấp system vẫn vào
+bình thường.
+
+### Vì sao role cấp system đè lên role project
+
+Matcher của authz có nhánh `g(r.sub, p.sub, "*")`, nên role gán ở domain `*` khớp **mọi**
+domain project. Hệ quả: gán cho ai đó `project:viewer` trên một project **không** hạ được
+quyền của họ nếu họ đang giữ `no-code-editor:editor` ở domain `*`. Muốn giới hạn theo
+project thì phải **gỡ role system của họ** bên authz — không làm được từ phía app này.
+
+### Quy trình bật an toàn
+
+1. Nhờ authz thêm p-rule (mục 1 ở trên) và map hết folder (mục 2).
+2. Đặt `AUTHZ_PROJECT_SCOPE=shadow`, deploy, chạy vài ngày.
+3. Xem Admin → Audit log, tìm dòng `shadow-allow` — đó là những thành viên project đang bị
+   chặn oan mà bật `on` sẽ mở khoá. Không có dòng nào ⇒ hoặc p-rule chưa có, hoặc mapping
+   còn thiếu, hoặc thật sự chưa ai cần.
+4. Đổi sang `on`, deploy lại.

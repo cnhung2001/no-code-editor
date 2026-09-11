@@ -60,7 +60,7 @@ export const DivEditor = forwardRef<DivEditorHandle, Props>(function DivEditor(
                 },
                 // Localize: dịch 1 chuỗi nguồn sang nhiều locale (engine ở backend).
                 async translate(text: string, from: string, targets: string[]) {
-                    return translate(text, from, targets);
+                    return translate(text, from, targets, project);
                 },
                 onChange() {
                     onChange?.();
