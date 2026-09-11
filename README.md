@@ -99,6 +99,10 @@ proxy phần còn lại (kèm HMR websocket) xuống Vite. Mở thẳng 5173 s�
 và HMR — cố ý, để không ai chạy sai origin mà không nhận ra, vì redirect URI của
 authz khớp tuyệt đối đúng một origin.
 
+`dev:all` chạy server bằng `node --watch`, sửa file trong `server/` là nó tự khởi
+động lại. Sửa `visual-editor/src` thì KHÔNG: app nạp editor ở dạng bundle
+(`visual-editor/dist`), phải `cd visual-editor && npm run build-lib` rồi reload.
+
 Prod: `npm run build` rồi chạy `server/` với `NODE_ENV=production` — cùng process
 serve `dist/` luôn, không cần web server riêng.
 
