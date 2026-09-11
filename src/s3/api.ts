@@ -8,7 +8,8 @@ import type {
     ProjectInfo,
     LayoutStatus,
     LayoutMeta,
-    PublishOptions
+    PublishOptions,
+    PublishResult
 } from '../types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -76,7 +77,7 @@ export const apiAdapter: S3Adapter = {
     },
 
     async publish(key: string, body: string, opts: PublishOptions) {
-        await j(
+        return j<PublishResult>(
             await fetch(`${BASE}/publish`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },

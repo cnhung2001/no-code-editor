@@ -119,6 +119,8 @@ export const mockAdapter: S3Adapter = {
     },
     async publish(key: string, body: string, _opts: PublishOptions) {
         await delay();
+        const isNew = !(key in LAYOUTS);
         try { LAYOUTS[key] = JSON.parse(body); } catch { /* ignore */ }
+        return { version: 'v1', cachePurged: isNew ? null : true };
     }
 };

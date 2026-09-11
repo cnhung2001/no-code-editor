@@ -50,6 +50,11 @@ const {
     S3_BUCKET = 'ik-nocode-paywall',
     PRESIGN_TTL = '900',
     CLOUDFRONT_DISTRIBUTION_ID = '',
+    // Endpoint purge cache do team hạ tầng dựng (xoá cả CloudFront lẫn Cloudflare).
+    // Nó xoá theo DIỆN RỘNG, không nhận key — nên chỉ gọi khi thật sự ghi đè một
+    // layout đã có, xem §publish. Để trống = tắt.
+    CDN_PURGE_URL = 'https://ocj5tukx8f.execute-api.ap-southeast-1.amazonaws.com/v1/delete-cache-cloudfront-cloudflare',
+    CDN_PURGE_TIMEOUT_MS = '15000',
     USE_S3_VERSIONING = 'true',
     // Sau khi gộp về một origin (§A), browser không còn gọi cross-origin nên
     // CORS mặc định TẮT. Chỉ bật khi thực sự cần client khác origin gọi vào —
@@ -69,6 +74,26 @@ const {
 
 const s3 = new S3Client({ region: AWS_REGION });
 const cf = CLOUDFRONT_DISTRIBUTION_ID ? new CloudFrontClient({ region: AWS_REGION }) : null;
+
+/**
+ * Gọi endpoint purge cache CDN. Trả true/false chứ KHÔNG ném: file đã nằm trên
+ * S3 rồi, để purge hỏng đánh đổ cả publish thì người dùng push lại lần nữa chỉ
+ * đẻ thêm một version rác mà cache vẫn bẩn. Trả về để client còn hiện cảnh báo.
+ */
+async function purgeCdnCache() {
+    try {
+        const r = await fetch(CDN_PURGE_URL, {
+            signal: AbortSignal.timeout(Number(CDN_PURGE_TIMEOUT_MS) || 15000)
+        });
+        if (!r.ok) {
+            throw new Error(`${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+        }
+        return true;
+    } catch (e) {
+        console.error('[cdn-purge]', String(e.message || e));
+        return false;
+    }
+}
 
 const app = express();
 if (CORS_ORIGIN) {
@@ -504,14 +529,17 @@ app.post('/api/publish', async (req, res) => {
             } catch { /* file mới, chưa có bản cũ */ }
         }
 
-        // 2. Tính version mới
+        // 2. Key đã có trên S3 chưa? Dùng cho CẢ hai việc: tính version, và quyết
+        //    định có purge cache hay không ở bước 5.
+        let head = null;
+        try {
+            head = await s3.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        } catch { /* file mới */ }
+
         let nextVersion = 'v1';
-        if (bumpVersion) {
-            try {
-                const head = await s3.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
-                const cur = parseInt((head.Metadata?.version || 'v0').replace(/\D/g, ''), 10) || 0;
-                nextVersion = `v${cur + 1}`;
-            } catch { /* file mới */ }
+        if (bumpVersion && head) {
+            const cur = parseInt((head.Metadata?.version || 'v0').replace(/\D/g, ''), 10) || 0;
+            nextVersion = `v${cur + 1}`;
         }
 
         // 3. Ghi bản publish (status=live)
@@ -546,7 +574,16 @@ app.post('/api/publish', async (req, res) => {
             }));
         }
 
-        res.json({ ok: true, version: nextVersion });
+        // 5. Purge cache CDN. CHỈ khi ghi đè: key mới thì chưa có gì trong cache để
+        //    xoá, mà endpoint này purge diện rộng — gọi thừa là bắt mọi layout khác
+        //    của mọi project phải nạp lại từ origin.
+        let cachePurged = null;
+        if (invalidateCdn && head && CDN_PURGE_URL) {
+            cachePurged = await purgeCdnCache();
+        }
+        res.locals.auditDetail.cachePurged = cachePurged;
+
+        res.json({ ok: true, version: nextVersion, cachePurged });
     } catch (e) {
         res.status(500).send(String(e.message || e));
     }

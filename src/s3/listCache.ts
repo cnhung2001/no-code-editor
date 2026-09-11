@@ -65,8 +65,9 @@ export function withListCache(adapter: S3Adapter): S3Adapter {
         },
 
         async publish(key: string, body: string, opts: PublishOptions) {
-            await adapter.publish(key, body, opts);
+            const res = await adapter.publish(key, body, opts);
             invalidate();
+            return res;
         }
     };
 }

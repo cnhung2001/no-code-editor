@@ -38,6 +38,16 @@ export interface PublishOptions {
     meta?: LayoutMeta;
 }
 
+export interface PublishResult {
+    version: string;
+    /**
+     * Kết quả purge cache CDN: true = đã xoá, false = gọi endpoint purge hỏng
+     * (file VẪN publish xong), null = không gọi — layout mới, hoặc bỏ tick
+     * invalidate, hoặc server không cấu hình CDN_PURGE_URL.
+     */
+    cachePurged: boolean | null;
+}
+
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)
 export interface S3Adapter {
     listProjects(): Promise<ProjectInfo[]>;
@@ -53,5 +63,5 @@ export interface S3Adapter {
     putObject(key: string, body: string, status?: LayoutStatus, meta?: LayoutMeta): Promise<void>;
     deleteObject(key: string): Promise<void>;
     uploadAsset(project: string, file: File): Promise<string>;
-    publish(key: string, body: string, opts: PublishOptions): Promise<void>;
+    publish(key: string, body: string, opts: PublishOptions): Promise<PublishResult>;
 }

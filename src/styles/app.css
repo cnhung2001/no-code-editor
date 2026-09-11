@@ -249,6 +249,8 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .push-field input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; font-family: inherit; font-size: 13px; }
 .push-check { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
 .push-err { color: #b3261e; font-size: 13px; }
+.push-warn { color: #8a5300; background: #fff4e0; border: 1px solid #f0d0a0;
+    border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.45; }
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 11px; font-size: 13px; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 36px rgba(0, 0, 0, .3); z-index: 60; }
