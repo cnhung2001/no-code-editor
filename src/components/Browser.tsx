@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
-import { usePerms } from '../auth/AuthContext';
 import type { JsonKind } from '@divkitframework/visual-editor/dist/preview.js';
 import { useProjectPerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
