@@ -88,7 +88,7 @@ export const mockAdapter: S3Adapter = {
         await delay();
         return PROJECT_NAMES.map((name) => ({ name, prefix: `${name}/`, layoutCount: 3 }));
     },
-    async listPath(prefix: string, opts?: { recursive?: boolean }) {
+    async listPath(prefix: string, opts?: { recursive?: boolean; signal?: AbortSignal }) {
         await delay();
         if (!prefix) return PROJECT_NAMES.map((n) => ({ name: n, type: 'folder' as const, prefix: `${n}/` }));
         // Mock không có cây lồng nhau, nên recursive trả đúng asset của prefix đó.
@@ -97,7 +97,7 @@ export const mockAdapter: S3Adapter = {
         const proj = prefix.replace(/\/$/, '');
         return projectFiles(proj);
     },
-    async getObjectText(key: string) {
+    async getObjectText(key: string, _signal?: AbortSignal) {
         await delay();
         return JSON.stringify(LAYOUTS[key] || LAYOUT_WELCOME, null, 2);
     },

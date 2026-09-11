@@ -28,15 +28,15 @@ export const apiAdapter: S3Adapter = {
         return j<ProjectInfo[]>(await fetch(`${BASE}/projects`));
     },
 
-    async listPath(prefix: string, opts?: { recursive?: boolean }) {
+    async listPath(prefix: string, opts?: { recursive?: boolean; signal?: AbortSignal }) {
         const q = new URLSearchParams({ prefix });
         if (opts?.recursive) q.set('recursive', '1');
-        return j<S3Item[]>(await fetch(`${BASE}/list?${q}`));
+        return j<S3Item[]>(await fetch(`${BASE}/list?${q}`, { signal: opts?.signal }));
     },
 
-    async getObjectText(key: string) {
+    async getObjectText(key: string, signal?: AbortSignal) {
         const q = new URLSearchParams({ key });
-        const res = await fetch(`${BASE}/object?${q}`);
+        const res = await fetch(`${BASE}/object?${q}`, { signal });
         if (res.status === 401) redirectToLogin();
         if (!res.ok) throw new Error(`getObject ${res.status}`);
         return res.text();

@@ -175,31 +175,69 @@ const LOTTIE_MARK = /"fr"\s*:\s*[\d.]/;
 
 // Cache theo ETag: điều hướng qua lại một project không phải peek lại, và ETag
 // đổi thì entry cũ tự hết hiệu lực.
+//
+// ETag dùng để đối chiếu lấy từ CHÍNH kết quả ListObjectsV2 của route gọi vào —
+// đó là điểm mấu chốt. Trước đây cache đối chiếu bằng ETag của ranged GET, tức
+// phải gọi S3 rồi mới biết cache còn đúng: tiết kiệm 512 byte parse, không tiết
+// kiệm round-trip nào. Mỗi lần đổi tab là ~32 ranged GET thừa (~400ms).
 const jsonKindCache = new Map();
 
+// Danh sách nông và danh sách đệ quy của cùng một project chạy song song và phủ
+// lên nhau ở các file cấp gốc. Cache nguội thì cả hai cùng miss → gộp về một
+// lượt peek thay vì hai. Key kèm ETag để hai bên kỳ vọng khác nhau (một bên
+// list trước, một bên sau khi file đổi) không dùng chung kết quả.
+const jsonPeekInflight = new Map();
+
 /**
- * Trả về { type, version, status } cho một object .json trong 1 request.
- * Ranged GET mang theo cả Metadata nên không cần HeadObject riêng.
+ * Trả về { type, version, status } cho một object .json.
+ *
+ * `etag` là ETag mà caller đã có sẵn từ ListObjectsV2. Khớp cache thì không
+ * chạm S3; không khớp (hoặc caller không có) thì mới ranged GET — nó mang theo
+ * cả Metadata nên vẫn không cần HeadObject riêng.
  */
-async function peekJson(key) {
+async function peekJson(key, etag) {
+    const cached = jsonKindCache.get(key);
+    if (etag && cached && cached.etag === etag) {
+        return { type: cached.type, version: cached.version, status: cached.status };
+    }
+
+    const slot = `${key}\u0000${etag || ''}`;
+    let pending = jsonPeekInflight.get(slot);
+    if (!pending) {
+        pending = fetchJsonHead(key).finally(() => jsonPeekInflight.delete(slot));
+        jsonPeekInflight.set(slot, pending);
+    }
+    return pending;
+}
+
+async function fetchJsonHead(key) {
     const out = await s3.send(new GetObjectCommand({
         Bucket: S3_BUCKET,
         Key: key,
         Range: `bytes=0-${JSON_PEEK_BYTES - 1}`
     }));
-    const meta = { version: out.Metadata?.version, status: out.Metadata?.status };
-    const etag = out.ETag;
-    const cached = etag && jsonKindCache.get(key);
-    if (cached && cached.etag === etag) {
-        return { type: cached.type, ...meta };
-    }
-
     const head = await streamToString(out.Body);
     // DivKit trước: một file lạ thì mặc định là layout — client verify lại bằng
     // detectJsonKind khi render, nên đoán sai chỉ tốn một lần đổi tỉ lệ tile.
-    const type = DIVKIT_MARK.test(head) ? 'json' : (LOTTIE_MARK.test(head) ? 'lottie' : 'json');
-    if (etag) jsonKindCache.set(key, { etag, type });
-    return { type, ...meta };
+    const entry = {
+        etag: out.ETag,
+        type: DIVKIT_MARK.test(head) ? 'json' : (LOTTIE_MARK.test(head) ? 'lottie' : 'json'),
+        version: out.Metadata?.version,
+        status: out.Metadata?.status
+    };
+    if (entry.etag) jsonKindCache.set(key, entry);
+    return { type: entry.type, version: entry.version, status: entry.status };
+}
+
+/**
+ * Bỏ entry cache của một key sau khi tiến trình này ghi/xoá nó.
+ *
+ * Cần thiết vì ETag là MD5 của NỘI DUNG: publish một draft mà không sửa gì thì
+ * body y hệt, ETag y hệt, nhưng metadata status draft→live đã đổi — chỉ so ETag
+ * sẽ trả về badge cũ mãi mãi.
+ */
+function forgetJsonKind(key) {
+    if (key) jsonKindCache.delete(key);
 }
 
 async function streamToString(stream) {
@@ -256,7 +294,7 @@ app.get('/api/list', async (req, res) => {
                     let type = kind(o.Key);
                     if (type === 'json') {
                         try {
-                            ({ type } = await peekJson(o.Key));
+                            ({ type } = await peekJson(o.Key, o.ETag));
                         } catch { /* ignore */ }
                     }
                     return {
@@ -295,7 +333,7 @@ app.get('/api/list', async (req, res) => {
                     let version, status;
                     if (t === 'json') {
                         try {
-                            ({ type: t, version, status } = await peekJson(o.Key));
+                            ({ type: t, version, status } = await peekJson(o.Key, o.ETag));
                         } catch { /* ignore — giữ 'json' */ }
                     }
                     return {
@@ -372,6 +410,7 @@ app.put('/api/object', async (req, res) => {
             ContentType: 'application/json',
             Metadata: buildMeta(status ? { status } : {}, meta)
         }));
+        forgetJsonKind(key);
         // Bucket bật versioning → giữ VersionId là đủ để sau này dựng lại đúng
         // nội dung trước/sau, không cần nhồi cả body layout vào DB audit.
         res.locals.s3VersionId = out.VersionId ?? null;
@@ -388,6 +427,7 @@ app.delete('/api/object', async (req, res) => {
     if (!key) return res.status(400).send('thiếu key');
     try {
         const out = await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        forgetJsonKind(key);
         // Bucket bật versioning ⇒ đây là delete marker, bản cũ vẫn còn. VersionId
         // của marker cho phép khôi phục bằng cách xoá đúng marker đó.
         res.locals.s3VersionId = out.VersionId ?? null;
@@ -411,6 +451,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             Body: file.buffer,
             ContentType: file.mimetype
         }));
+        forgetJsonKind(key);
         // Enforce bằng quyền 'update', nhưng log là 'upload' cho dễ đọc lại.
         res.locals.auditAction = 'upload';
         res.locals.s3VersionId = out.VersionId ?? null;
@@ -460,6 +501,7 @@ app.post('/api/publish', async (req, res) => {
                 'published-at': new Date().toISOString()
             }, meta)
         }));
+        forgetJsonKind(key);
         res.locals.s3VersionId = put.VersionId ?? null;
         res.locals.auditDetail = {
             version: nextVersion,

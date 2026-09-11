@@ -41,9 +41,14 @@ export interface PublishOptions {
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)
 export interface S3Adapter {
     listProjects(): Promise<ProjectInfo[]>;
-    /** recursive: mọi file dưới prefix, không gồm folder (dùng cho asset cả project). */
-    listPath(prefix: string, opts?: { recursive?: boolean }): Promise<S3Item[]>;
-    getObjectText(key: string): Promise<string>;
+    /**
+     * recursive: mọi file dưới prefix, không gồm folder (dùng cho asset cả project).
+     * signal: huỷ khi caller không còn cần kết quả — đổi tab liên tục mà không
+     * huỷ thì request của tab cũ vẫn chiếm hết 6 kết nối/origin của browser và
+     * tab mới phải xếp hàng sau chúng.
+     */
+    listPath(prefix: string, opts?: { recursive?: boolean; signal?: AbortSignal }): Promise<S3Item[]>;
+    getObjectText(key: string, signal?: AbortSignal): Promise<string>;
     getAssetUrl(key: string): Promise<string>;
     putObject(key: string, body: string, status?: LayoutStatus, meta?: LayoutMeta): Promise<void>;
     deleteObject(key: string): Promise<void>;

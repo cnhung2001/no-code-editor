@@ -38,12 +38,17 @@ const CACHE_LIMIT = 60;
 
 const jsonCache = new Map<string, Promise<string>>();
 
+/** Lỗi do chính ta huỷ request, không phải file hỏng — không đánh dấu `failed`. */
+function isAbort(e: unknown): boolean {
+    return e instanceof DOMException && e.name === 'AbortError';
+}
+
 /** JSON đã resolve asset, cache theo key vì quay lại folder là dựng lại cả lưới. */
-function loadJson(key: string, project: string): Promise<string> {
+function loadJson(key: string, project: string, signal: AbortSignal): Promise<string> {
     const cached = jsonCache.get(key);
     if (cached) return cached;
 
-    const promise = s3.getObjectText(key).then((text) => resolveAssets(text, project));
+    const promise = s3.getObjectText(key, signal).then((text) => resolveAssets(text, project));
     // Lỗi thì không giữ trong cache: lần mở sau phải được thử lại.
     promise.catch(() => jsonCache.delete(key));
 
@@ -151,7 +156,18 @@ export function JsonThumb({ itemKey, project, fallback, onKind }: Props) {
         const box = boxRef.current;
         if (!box || failed) return;
 
+        // Huỷ ở CLEANUP của effect, tức khi cả lưới bị tháo (đổi tab) — không
+        // huỷ ở teardown của IntersectionObserver, vì cuộn ra rồi cuộn lại phải
+        // dùng lại cache chứ không tải lại. Thumbnail là phần nặng nhất của một
+        // lần đổi tab (1.4 MB / 16 file ở project trong ảnh); để chúng chạy tiếp
+        // cho một tab không còn ai xem là cách chắc chắn làm tab mới phải chờ.
+        const ac = new AbortController();
         let alive = true;
+        // `jsonCache` chia sẻ một promise cho mọi consumer cùng key, nên promise
+        // ta đang chờ có thể chết vì NGƯỜI KHÁC huỷ — StrictMode dựng effect hai
+        // lần là đúng tình huống đó. Cho phép đúng một lần thử lại trên fetch
+        // mới, nếu không tile kẹt trắng vĩnh viễn (abort không đặt `failed`).
+        let retried = false;
         let instance: CardPreviewInstance | LottiePreviewInstance | null = null;
         let holdsSlot = false;
         let pending = false;
@@ -187,7 +203,7 @@ export function JsonThumb({ itemKey, project, fallback, onKind }: Props) {
                 return;
             }
             try {
-                const json = await loadJson(itemKey, project);
+                const json = await loadJson(itemKey, project, ac.signal);
                 const stage = stageRef.current;
                 if (!alive || mine !== token || !stage) {
                     release();
@@ -218,10 +234,17 @@ export function JsonThumb({ itemKey, project, fallback, onKind }: Props) {
                 pending = false;
                 release();
                 setReady(true);
-            } catch {
+            } catch (e) {
                 pending = false;
                 release();
-                if (alive && mine === token) setFailed(true);
+                if (!alive || mine !== token) return;
+                if (!isAbort(e)) {
+                    setFailed(true);
+                } else if (!ac.signal.aborted && !retried) {
+                    // Signal của ta còn nguyên ⇒ người huỷ là consumer khác.
+                    retried = true;
+                    void mount();
+                }
             }
         }
 
@@ -242,6 +265,7 @@ export function JsonThumb({ itemKey, project, fallback, onKind }: Props) {
             alive = false;
             observer.disconnect();
             teardown();
+            ac.abort();
         };
     }, [itemKey, project, failed]);
 
