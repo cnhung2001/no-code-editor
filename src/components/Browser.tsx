@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
-import { s3 } from '../s3';
+import { s3, peekList } from '../s3';
 import type { JsonKind } from '@divkitframework/visual-editor/dist/preview.js';
 import { useProjectPerms } from '../auth/AuthContext';
 import type { S3Item } from '../types';
@@ -61,7 +61,11 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     // chúng. Đó là lý do đổi tab liên tục thì mỗi lần lại lâu hơn lần trước.
     useEffect(() => {
         const ac = new AbortController();
-        setLoading(true);
+        // Đã xem chỗ này rồi thì vẽ luôn, đừng bắt nhìn skeleton lần nữa. Vẫn
+        // tải lại ở dưới: người khác có thể vừa publish hoặc xoá gì đó.
+        const cached = peekList(prefix);
+        setItems(cached ?? []);
+        setLoading(!cached);
         setErr(null);
         setAssetsOpen(false);
         s3.listPath(prefix, { signal: ac.signal })
@@ -75,8 +79,11 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 
     useEffect(() => {
         const ac = new AbortController();
-        setProjectFiles([]);
-        setProjectLoaded(false);
+        const cachedFiles = project ? peekList(`${project}/`, true) : undefined;
+        setProjectFiles(cachedFiles ?? []);
+        // Có cache thì folder chỉ chứa asset được lọc ngay từ nhịp đầu, không
+        // hiện lên rồi biến mất.
+        setProjectLoaded(Boolean(cachedFiles));
         if (!project) return;
         s3.listPath(`${project}/`, { recursive: true, signal: ac.signal })
             .then((res) => !ac.signal.aborted && setProjectFiles(res))
