@@ -249,6 +249,7 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .push-field input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; font-family: inherit; font-size: 13px; }
 .push-check { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
 .draft-flag { color: var(--amber, #8a5300); font-size: 11px; font-weight: 600; }
+.meta-warn { color: #8a5300; }
 .push-err { color: #b3261e; font-size: 13px; }
 .push-warn { color: #8a5300; background: #fff4e0; border: 1px solid #f0d0a0;
     border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.45; }

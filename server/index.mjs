@@ -404,6 +404,10 @@ app.get('/api/list', async (req, res) => {
                         version,
                         status,
                         hasDraft: drafts.has(name),
+                        // Trả thẳng key nháp thay vì để FE tự suy: quy tắc đặt key
+                        // chỉ nên có MỘT bản (draft-key.mjs), lệch một bên là nội
+                        // dung chưa duyệt nằm sai chỗ.
+                        draftKey: drafts.has(name) ? `${dPrefix}${name}` : undefined,
                         config: name === 'config.json'
                     };
                 })
@@ -422,7 +426,8 @@ app.get('/api/list', async (req, res) => {
                 modified: o.LastModified?.toISOString(),
                 status: 'draft',
                 hasDraft: true,
-                draftOnly: true
+                draftOnly: true,
+                draftKey: `${dPrefix}${name}`
             }));
 
         res.json([...folders, ...files, ...draftOnly]);

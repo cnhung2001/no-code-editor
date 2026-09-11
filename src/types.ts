@@ -20,6 +20,8 @@ export interface S3Item {
     hasDraft?: boolean;
     /** Chỉ mới có nháp, chưa publish lần nào — `key` là nơi nó SẼ nằm sau khi push. */
     draftOnly?: boolean;
+    /** Key thật của bản nháp (`<project>/.drafts/…`), do server tính. */
+    draftKey?: string;
     config?: boolean; // true nếu là config.json
 }
 

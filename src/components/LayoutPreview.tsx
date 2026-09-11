@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
-import { objectUrl } from '../s3/publicUrl';
+import { objectUrl, S3_BUCKET } from '../s3/publicUrl';
 import { copyText } from '../lib/clipboard';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
@@ -76,10 +76,19 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
         flash('Đã lưu nháp · chưa lên bản live (nằm ở .drafts/)');
     }
 
+    // Layout chưa publish lần nào: link CDN của key thật là link CHẾT (chưa có
+    // object nào ở đó). Đưa đường dẫn S3 của bản nháp thay vì một URL 404 trông
+    // như thật — người ta copy nó đi dán vào remote_url là hỏng.
+    const pathLabel = file.draftOnly
+        ? `s3://${S3_BUCKET}/${file.draftKey}`
+        : file.key
+          ? objectUrl(file.key)
+          : '—';
+
     async function copyPath() {
-        if (!file.key) return;
+        if (!file.key && !file.draftKey) return;
         try {
-            await copyText(objectUrl(file.key));
+            await copyText(pathLabel);
             setCopied(true);
             window.clearTimeout(copyTimer.current);
             copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
@@ -145,10 +154,10 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         </header>
                         <div className="meta-modal-body">
                             <dl>
-                                <dt>S3 path</dt>
+                                <dt>{file.draftOnly ? 'Đường dẫn nháp' : 'S3 path'}</dt>
                                 <dd className="meta-copy">
-                                    <span>{file.key ? objectUrl(file.key) : '—'}</span>
-                                    {file.key && (
+                                    <span>{pathLabel}</span>
+                                    {(file.key || file.draftKey) && (
                                         <button
                                             className={`icon-btn${copied ? ' copied' : ''}`}
                                             title="Copy S3 path"
@@ -159,6 +168,20 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                                         </button>
                                     )}
                                 </dd>
+                                {file.draftOnly && (
+                                    <>
+                                        <dt>Bản live</dt>
+                                        <dd className="meta-warn">chưa publish — link CDN chưa sống</dd>
+                                    </>
+                                )}
+                                {file.hasDraft && !file.draftOnly && (
+                                    <>
+                                        <dt>Bản nháp</dt>
+                                        <dd className="meta-warn">
+                                            đang mở bản nháp, chưa lên live · s3://{S3_BUCKET}/{file.draftKey}
+                                        </dd>
+                                    </>
+                                )}
                                 <dt>log_id</dt><dd>{raw ? extractLogId(raw) : '—'}</dd>
                                 <dt>Version</dt><dd>{file.version || '—'}</dd>
                                 <dt>Status</dt><dd>{file.status || '—'}</dd>
