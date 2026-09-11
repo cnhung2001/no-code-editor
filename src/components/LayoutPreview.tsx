@@ -40,7 +40,7 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
     useEffect(() => {
         let alive = true;
         if (!file.key) return;
-        s3.getObjectText(file.key)
+        s3.getObjectText(file.key, undefined, { preferDraft: true })
             .then(async (text) => {
                 if (!alive) return;
                 setRaw(text);
@@ -73,7 +73,7 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
         if (!v || !file.key) return;
         await s3.putObject(file.key, toSaveFormat(v), 'draft', extractMeta(v));
         setDirty(false);
-        flash(`Draft saved · s3://ik-nocode-paywall/${file.key}`);
+        flash('Đã lưu nháp · chưa lên bản live (nằm ở .drafts/)');
     }
 
     async function copyPath() {

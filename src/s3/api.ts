@@ -35,8 +35,9 @@ export const apiAdapter: S3Adapter = {
         return j<S3Item[]>(await fetch(`${BASE}/list?${q}`, { signal: opts?.signal }));
     },
 
-    async getObjectText(key: string, signal?: AbortSignal) {
+    async getObjectText(key: string, signal?: AbortSignal, opts?: { preferDraft?: boolean }) {
         const q = new URLSearchParams({ key });
+        if (opts?.preferDraft) q.set('draft', '1');
         const res = await fetch(`${BASE}/object?${q}`, { signal });
         if (res.status === 401) redirectToLogin();
         if (!res.ok) throw new Error(`getObject ${res.status}`);

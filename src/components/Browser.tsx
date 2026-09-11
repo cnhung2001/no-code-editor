@@ -177,9 +177,13 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                             {/* Chỉ layout được push qua tool mới có metadata này; một
                                 animation Lottie hay ảnh thì không, nên đừng dán nhãn
                                 "Draft" cho thứ vốn không có vòng đời draft/live. */}
-                            {(it.status || it.version) && (
+                            {(it.status || it.version || it.hasDraft) && (
                                 <div className="card-foot">
                                     {it.status && <StatusBadge status={it.status} />}
+                                    {/* Có nháp chưa push: bản live vẫn là bản cũ, người mở
+                                        file sẽ thấy nháp — nói ra thay vì để họ đoán. */}
+                                    {it.hasDraft && !it.draftOnly && <span className="draft-flag">+ nháp</span>}
+                                    {it.draftOnly && <span className="draft-flag">chưa publish</span>}
                                     {it.version && <span className="ver">{it.version}</span>}
                                 </div>
                             )}

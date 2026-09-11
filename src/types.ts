@@ -16,6 +16,10 @@ export interface S3Item {
     modified?: string; // ISO string
     version?: string; // từ object metadata, vd "v3"
     status?: LayoutStatus; // từ object metadata
+    /** Có bản nháp chưa publish nằm ở <project>/.drafts/ */
+    hasDraft?: boolean;
+    /** Chỉ mới có nháp, chưa publish lần nào — `key` là nơi nó SẼ nằm sau khi push. */
+    draftOnly?: boolean;
     config?: boolean; // true nếu là config.json
 }
 
@@ -58,7 +62,8 @@ export interface S3Adapter {
      * tab mới phải xếp hàng sau chúng.
      */
     listPath(prefix: string, opts?: { recursive?: boolean; signal?: AbortSignal }): Promise<S3Item[]>;
-    getObjectText(key: string, signal?: AbortSignal): Promise<string>;
+    /** preferDraft: mở để sửa → lấy bản nháp nếu có. Mặc định lấy bản live. */
+    getObjectText(key: string, signal?: AbortSignal, opts?: { preferDraft?: boolean }): Promise<string>;
     getAssetUrl(key: string): Promise<string>;
     putObject(key: string, body: string, status?: LayoutStatus, meta?: LayoutMeta): Promise<void>;
     deleteObject(key: string): Promise<void>;

@@ -9,12 +9,13 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "npm run test:route && npm run test:cache && npm run test:scope",
+    "test": "npm run test:route && npm run test:cache && npm run test:scope && npm run test:draft",
     "server": "node server/index.mjs",
     "dev:all": "concurrently -k \"npm:server\" \"npm:dev\"",
     "test:route": "node --experimental-strip-types src/lib/route.test.ts",
     "test:cache": "node --experimental-strip-types src/s3/listCache.test.ts",
-    "test:scope": "node server/project-scope.test.mjs"
+    "test:scope": "node server/project-scope.test.mjs",
+    "test:draft": "node server/draft-key.test.mjs"
   },
   "dependencies": {
     "@divkitframework/visual-editor": "file:./visual-editor",
