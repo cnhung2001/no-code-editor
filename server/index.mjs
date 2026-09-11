@@ -355,11 +355,37 @@ app.get('/api/list', async (req, res) => {
 });
 
 // ── Lấy nội dung text (JSON) ───────────────────────────────────────────────
+// Có ETag + revalidate. Đây là route tốn băng thông nhất của tool: mỗi lần vào
+// một project là toàn bộ layout được tải về để dựng thumbnail (1.4 MB cho một
+// project cỡ trung), và F5 một cái là tải lại từ đầu.
+//
+// `no-cache` chứ không phải max-age: layout đổi khi có người publish, mà một
+// bản cũ hiện ra sau khi publish thì tệ hơn nhiều so với một request rỗng. Với
+// `no-cache` browser vẫn hỏi mọi lần, nhưng khớp ETag thì 304 và không tải body.
+//
+// If-None-Match được chuyển TIẾP xuống S3, không chỉ so ở đây: so ở đây thì vẫn
+// phải kéo nguyên file từ S3 về mới biết là giống nhau. Đẩy xuống S3 thì chặng
+// đó cũng rỗng nốt.
 app.get('/api/object', async (req, res) => {
+    const ifNoneMatch = req.headers['if-none-match'];
     try {
-        const out = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: req.query.key }));
+        const out = await s3.send(new GetObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: req.query.key,
+            ...(ifNoneMatch ? { IfNoneMatch: ifNoneMatch } : {})
+        }));
+        // Đặt TRƯỚC send(): express tự sinh ETag yếu từ body nếu header còn trống,
+        // mà ETag của S3 mới là thứ so được với `IfNoneMatch` ở vòng sau.
+        if (out.ETag) res.set('ETag', out.ETag);
+        res.set('Cache-Control', 'no-cache');
         res.type('application/json').send(await streamToString(out.Body));
     } catch (e) {
+        // S3 báo "không đổi" bằng cách ném, với http 304 trong metadata.
+        if (e.$metadata?.httpStatusCode === 304) {
+            res.set('ETag', ifNoneMatch);
+            res.set('Cache-Control', 'no-cache');
+            return res.status(304).end();
+        }
         res.status(500).send(String(e.message || e));
     }
 });
