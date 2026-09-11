@@ -56,6 +56,10 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 .btn.primary:hover { background: #000; }
 .btn.ghost:hover { background: #f4f5f3; }
+/* Nút Assets khi view assets đang mở — trạng thái bật, khác ghost thường. */
+.btn.ghost.active { background: var(--green-bg); border-color: var(--green); color: var(--green-2); }
+.btn-count { padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, .08); font-size: 11px; font-weight: 700; }
+.btn.ghost.active .btn-count { background: rgba(12, 138, 62, .16); }
 .btn:disabled { opacity: .5; cursor: default; }
 .icon-btn { background: none; border: 0; cursor: pointer; color: var(--ink-3); display: grid; place-items: center; padding: 4px; border-radius: 7px; }
 .icon-btn:hover { background: #f0f1ef; color: var(--ink); }
@@ -80,7 +84,15 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .b-meta { padding: 12px 24px 0; color: var(--ink-3); font-size: 12.5px; }
 .b-err { color: #b3261e; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; padding: 16px 24px 40px; overflow-y: auto; }
+/* Scroll và padding tách khỏi .cards, vì view assets có nhiều lưới (một cho
+   mỗi loại) nằm trong cùng một vùng cuộn. min-height: 0 để flex item co được. */
+.cards-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 24px 40px; }
+/* align-items: start — tile layout cao bằng cả màn hình, card ngắn (folder,
+   asset) không được kéo giãn theo hàng rồi để lại một vùng trắng. */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; align-items: start; }
+.asset-group + .asset-group { margin-top: 26px; }
+.asset-group-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.asset-group-count { padding: 1px 7px; border-radius: 999px; background: rgba(0, 0, 0, .06); font-size: 11px; letter-spacing: 0; }
 .card-wrap { position: relative; display: flex; }
 .card { flex: 1; text-align: left; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); cursor: pointer; overflow: hidden; padding: 0; display: flex; flex-direction: column; transition: .12s; }
 .card-del { position: absolute; top: 8px; right: 8px; z-index: 2; width: 30px; height: 30px; display: grid; place-items: center; border: none; border-radius: 8px; background: rgba(8, 10, 12, .62); color: #fff; cursor: pointer; opacity: 0; transition: .12s; }
@@ -90,7 +102,23 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .card:hover { border-color: var(--green); box-shadow: 0 6px 22px rgba(12, 138, 62, .1); transform: translateY(-2px); }
 .card-thumb { height: 132px; display: grid; place-items: center; background: #0b0c10; overflow: hidden; }
 .card-thumb.folder { background: var(--green-bg); }
-.card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.card-thumb img, .card-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Tile mang đúng tỉ lệ màn hình đang render, nhờ đó fit trọn layout mà không
+   để lại dải trống hai bên. */
+.card-thumb.live { display: block; position: relative; flex: none; height: auto; aspect-ratio: 375 / 812; background: #fff; }
+/* Lottie không phải một màn hình: giữ tile vuông, animation tự fit vào trong. */
+.card-thumb.anim { display: block; position: relative; flex: none; height: auto; aspect-ratio: 1; background: #fff; }
+/* Icon chờ/thất bại: nền tile là trắng nên màu trắng mặc định sẽ vô hình. */
+.card-thumb.live .thumb-big, .card-thumb.anim .thumb-big { color: #c6c9c3; }
+/* inset thay cho height:100%: chiều cao của tile do aspect-ratio sinh ra, đo
+   qua phần trăm là chỗ dễ ra 0. */
+.thumb-live { position: absolute; inset: 0; overflow: hidden; background: #fff; display: grid; place-items: center; }
+/* Vị trí và scale do JS tính (xem fitInside), CSS chỉ chốt điểm gốc. */
+.thumb-live-stage { position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: none; }
+/* Cùng luật với .renderer__content-inner trong editor: root của card là flex
+   item nên stretch lo chiều cao, còn chiều ngang phải nói rõ. Thiếu dòng này
+   thì card co về bề rộng nội dung. */
+.thumb-live-stage > * { width: 100%; }
 .thumb-big { transform: scale(1.9); opacity: .85; color: #fff; }
 .card-thumb.folder .thumb-big { color: var(--green-2); }
 .card-body { padding: 11px 13px; display: flex; flex-direction: column; gap: 5px; }
@@ -112,6 +140,60 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .meta-modal-body dl { display: grid; grid-template-columns: 92px 1fr; gap: 8px 12px; margin: 0; font-size: 13px; }
 .meta-modal-body dt { color: var(--ink-3); }
 .meta-modal-body dd { margin: 0; word-break: break-all; }
+
+/* ── Preview modal: khung device + action log ─────────────────────────────
+   Rộng/cao đủ cho viewport lớn nhất trong VIEWPORT_LIST (430x932) cộng log,
+   nhưng vẫn nhường .modal cắt ở 90vw/88vh trên màn nhỏ — khung tự scale cho
+   vừa chỗ còn lại nên con số ở đây không phải giới hạn cứng. */
+.preview-modal { width: min(1000px, 90vw); height: min(940px, 88vh); }
+.pv-head-actions { display: flex; align-items: center; gap: 8px; }
+.pv-viewport { font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.pv-scale { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+/* grid-template-rows: minmax(0, 1fr) — giống .p-body, và ở đây là BẮT BUỘC:
+   row `auto` sẽ cao theo khung device (896px), rồi .pv-fit cao 100% của row đó,
+   nên phép đo "còn bao nhiêu chỗ" trả về chính chiều cao của thứ cần thu nhỏ →
+   scale luôn ra 1 và khung không bao giờ vừa. */
+.pv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: minmax(0, 1fr); }
+/* Khung device cao hơn modal (896px trên laptop 13") thì THU NHỎ cho vừa, chứ
+   không cuộn: cuộn nghĩa là không bao giờ thấy cả màn một lúc, mà nhìn tổng thể
+   mới là việc của preview. overflow: hidden để không có scrollbar nào chen vào
+   phép đo — scrollbar hiện/ẩn sẽ làm ResizeObserver dao động. */
+.pv-frame-wrap { position: relative; overflow: hidden; min-width: 0; min-height: 0; background: #eceae2; }
+/* inset thay cho width/height 100%, cùng lý do như .thumb-live: đo bằng phần
+   trăm thì % resolve theo grid row, mà row là `auto` nên nó cao theo chính
+   khung device cần thu nhỏ — phép đo trả về đúng thứ mình đang muốn đo, scale
+   luôn ra 1. Lấy kích thước từ HỘP của wrap thì không có đường vòng nào. */
+.pv-fit { position: absolute; inset: 20px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); place-items: center; }
+/* Kích thước = khung SAU scale, nên đây là item không tràn và canh giữa chắc
+   chắn đúng. Nếu để .pv-frame (812px) tự canh giữa thì nó tràn khỏi row, mà
+   phần tử tràn thì neo ở đỉnh chứ không canh giữa — khung sẽ lệch xuống. */
+.pv-scaled { position: relative; }
+.pv-frame { position: absolute; top: 0; left: 0; transform-origin: top left; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 34px rgba(0, 0, 0, .18); }
+.pv-stage { width: 100%; height: 100%; }
+/* Cùng luật với .thumb-live-stage: prepareTarget của cardPreview chỉ đặt
+   flex + align-items:stretch, mà stretch lo chiều CAO. Chiều ngang phải nói
+   rõ, nếu không root card co về bề rộng nội dung — nửa khung để trống. */
+.pv-stage > * { width: 100%; }
+.pv-error { position: absolute; left: 20px; right: 20px; bottom: 16px; padding: 8px 12px; border-radius: 9px; background: #fdecec; color: #a11; font-size: 12.5px; }
+
+/* 320px chứ không hẹp hơn: dòng lỗi mang cả `url=`, `expression=` và `path=`,
+   cột chật thì mỗi giá trị xuống bốn dòng và không ai đọc nổi. */
+.pv-log { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+.pv-log-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 12.5px; }
+.pv-log-empty { margin: 0; padding: 14px; color: var(--ink-3); font-size: 12px; line-height: 1.55; }
+.pv-log-list { flex: 1; overflow: auto; margin: 0; padding: 6px 0; list-style: none; }
+.pv-log-list li { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 7px 14px; border-bottom: 1px solid #f2f3f0; font-size: 12px; }
+.pv-log-time { color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.pv-log-name { font-weight: 600; word-break: break-all; }
+.pv-log-args { grid-column: 2; color: var(--ink-2); font-family: var(--mono); font-size: 11px; word-break: break-all; }
+.pv-log-list li.is-warn .pv-log-name { font-weight: 500; color: var(--amber); }
+.pv-log-list li.is-error .pv-log-name { font-weight: 500; color: #b3261e; }
+.pv-log-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 11px; line-height: 1.5; }
+.pv-log-note code { font-family: var(--mono); background: #f2f3f0; padding: 0 3px; border-radius: 4px; }
+.meta-copy { display: flex; align-items: flex-start; gap: 4px; }
+.meta-copy > span { min-width: 0; }
+.meta-copy .icon-btn { flex: none; margin-top: -3px; }
+.meta-copy .icon-btn.copied, .meta-copy .icon-btn.copied:hover { color: #12a150; }
 .p-stage { background: #eceae2; overflow: hidden; position: relative; }
 .p-meta { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 18px; }
 .p-meta h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin: 0 0 8px; }

@@ -1,6 +1,9 @@
 // ── Kiểu dữ liệu dùng chung toàn app ──────────────────────────────────────
 
-export type FileKind = 'folder' | 'json' | 'image' | 'html' | 'other';
+// 'lottie' = .json chứa animation Lottie, do server nhận ra bằng nội dung.
+// 'hls'    = một stream HLS (folder .m3u8 + .ts) gộp thành một mục; client tự
+//            dựng khi liệt kê asset, server không bao giờ trả về loại này.
+export type FileKind = 'folder' | 'json' | 'lottie' | 'image' | 'html' | 'other' | 'hls';
 export type LayoutStatus = 'live' | 'draft' | 'archived';
 
 // Một mục trong trình duyệt S3 (file hoặc folder)
@@ -38,7 +41,8 @@ export interface PublishOptions {
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)
 export interface S3Adapter {
     listProjects(): Promise<ProjectInfo[]>;
-    listPath(prefix: string): Promise<S3Item[]>;
+    /** recursive: mọi file dưới prefix, không gồm folder (dùng cho asset cả project). */
+    listPath(prefix: string, opts?: { recursive?: boolean }): Promise<S3Item[]>;
     getObjectText(key: string): Promise<string>;
     getAssetUrl(key: string): Promise<string>;
     putObject(key: string, body: string, status?: LayoutStatus, meta?: LayoutMeta): Promise<void>;

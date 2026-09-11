@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
+import { objectUrl } from '../s3/publicUrl';
+import { copyText } from '../lib/clipboard';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
 import { BUILDER_LAYOUT } from '../editor/editorConfig';
 import { resolveAssets } from '../editor/resolveAssets';
@@ -10,6 +12,7 @@ import { toSaveFormat, extractLogId, extractMeta } from '../editor/wrapper';
 import { usePerms } from '../auth/AuthContext';
 import type { S3Item, LayoutMeta } from '../types';
 import { Loader } from './Loader';
+import { PreviewModal } from './modals/PreviewModal';
 
 interface Props {
     path: string[];
@@ -28,6 +31,11 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
     const [dirty, setDirty] = useState(false);
     const [toast, setToast] = useState('');
     const [showMeta, setShowMeta] = useState(false);
+    // Giá trị đem đi preview được CHỐT lúc bấm, không đọc lại mỗi lần render:
+    // người ta sửa tiếp trong editor thì bản đang dùng thử phải đứng yên.
+    const [previewValue, setPreviewValue] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    const copyTimer = useRef(0);
 
     useEffect(() => {
         let alive = true;
@@ -43,6 +51,8 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
             alive = false;
         };
     }, [file.key, project]);
+
+    useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
     function flash(msg: string) {
         setToast(msg);
@@ -66,6 +76,24 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
         flash(`Draft saved · s3://ik-nocode-paywall/${file.key}`);
     }
 
+    async function copyPath() {
+        if (!file.key) return;
+        try {
+            await copyText(objectUrl(file.key));
+            setCopied(true);
+            window.clearTimeout(copyTimer.current);
+            copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+            flash('Không copy được — hãy chọn và copy tay từ ô S3 path');
+        }
+    }
+
+    // Preview bản ĐANG SỬA, không phải bản trên S3: sửa xong bấm thử ngay là
+    // lý do màn này tồn tại. Chưa dựng được editor thì lấy bản vừa tải về.
+    function openPreview() {
+        setPreviewValue(editorRef.current?.getValue() || resolved || '');
+    }
+
     function push() {
         const v = editorRef.current?.getValue();
         if (v && file.key) onPush(toSaveFormat(v), extractMeta(v));
@@ -78,6 +106,9 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                 <span className="p-title">{file.name}{dirty && '*'}</span>
                 <div className="p-actions">
                     <button className="btn ghost sm" onClick={() => setShowMeta(true)}>{Icon.info} Metadata</button>
+                    <button className="btn ghost sm" onClick={openPreview} disabled={!resolved}>
+                        {Icon.eye} Preview
+                    </button>
                     <button className="btn ghost sm" onClick={download}>{Icon.download} Download</button>
                     {perms.update && (
                         <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
@@ -114,7 +145,20 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         </header>
                         <div className="meta-modal-body">
                             <dl>
-                                <dt>S3 path</dt><dd>s3://ik-nocode-paywall/{file.key}</dd>
+                                <dt>S3 path</dt>
+                                <dd className="meta-copy">
+                                    <span>{file.key ? objectUrl(file.key) : '—'}</span>
+                                    {file.key && (
+                                        <button
+                                            className={`icon-btn${copied ? ' copied' : ''}`}
+                                            title="Copy S3 path"
+                                            aria-label="Copy S3 path"
+                                            onClick={copyPath}
+                                        >
+                                            {copied ? Icon.check : Icon.copy}
+                                        </button>
+                                    )}
+                                </dd>
                                 <dt>log_id</dt><dd>{raw ? extractLogId(raw) : '—'}</dd>
                                 <dt>Version</dt><dd>{file.version || '—'}</dd>
                                 <dt>Status</dt><dd>{file.status || '—'}</dd>
@@ -124,6 +168,14 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {previewValue !== null && (
+                <PreviewModal
+                    value={previewValue}
+                    title={file.name}
+                    onClose={() => setPreviewValue(null)}
+                />
             )}
 
             {toast && <div className="toast">{Icon.check} {toast}</div>}

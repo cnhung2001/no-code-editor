@@ -1,8 +1,9 @@
 <script lang="ts">
     /* eslint-disable max-len */
     import { get } from 'svelte/store';
-    import { render as divkitRender, SizeProvider, createGlobalVariablesController, createVariable, evalExpression, type DivkitDebugInstance } from '@divkitframework/divkit/client-devtool';
-    import type { DivExtensionClass, DivJson } from '@divkitframework/divkit/typings/common';
+    import { render as divkitRender, createGlobalVariablesController, createVariable, evalExpression, type DivkitDebugInstance } from '@divkitframework/divkit/client-devtool';
+    import type { DivJson } from '@divkitframework/divkit/typings/common';
+    import type { CustomComponentDescription } from '@divkitframework/divkit/typings/custom';
     import { getContext, onDestroy, tick } from 'svelte';
     import type { AnyVariable, GlobalVariablesController } from '@divkitframework/divkit/typings/variables';
     import {
@@ -16,7 +17,8 @@
     import { treeLeafContains, findLeaf } from '../utils/tree';
     import { bestSnap, type Snap } from '../utils/snap';
     import { deleteComponent, moveComponentUp, moveComponentDown, moveComponentLeft, moveComponentRight, bigMoveComponentUp, bigMoveComponentDown, bigMoveComponentRight, bigMoveComponentLeft, resizeComponentUp, resizeComponentDown, resizeComponentLeft, resizeComponentRight, bigResizeComponentUp, bigResizeComponentDown, bigResizeComponentRight, bigResizeComponentLeft, copy as copyShortcut, paste as pasteShortcut, cancel } from '../utils/keybinder/shortcuts';
-    import { Lottie } from '../data/lottieExt';
+    import { collectCustomComponents } from '../data/customComponents';
+    import { createDivExtensions } from '../data/divExtensions';
     import { templatesCheck } from '../utils/checkDivjson';
     import type { TreeLeaf } from '../ctx/tree';
     import { isEqual } from '../utils/isEqual';
@@ -157,6 +159,7 @@
     const previewPriceVariables: Record<string, AnyVariable> = {};
     let globalVariablesController: GlobalVariablesController | undefined;
     const globalVariables: Record<string, AnyVariable> = {};
+    const customComponents = new Map<string, CustomComponentDescription>();
     let mountedAndUpdatedLeafs = new Set<string>();
     const components = new Map<HTMLElement, ComponentProps>();
     let isUpdating = false;
@@ -1216,6 +1219,8 @@
         newRendererErrors = {};
         isUpdating = true;
 
+        collectCustomComponents(divjson, customComponents);
+
         if (instance) {
             const vars = instance.getDebugAllVariables();
             const paletteVariable = vars.get('local_palette');
@@ -1314,10 +1319,8 @@
                 globalVariablesController,
                 onComponent,
                 platform: 'desktop',
-                extensions: new Map<string, DivExtensionClass>([
-                    ['size_provider', SizeProvider],
-                    ['lottie', Lottie],
-                ]),
+                extensions: createDivExtensions(),
+                customComponents,
                 direction,
                 devtoolCreateHierarchy: 'eager',
                 typefaceProvider(fontFamily) {

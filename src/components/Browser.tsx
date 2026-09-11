@@ -1,11 +1,14 @@
 // ── Trình duyệt S3: breadcrumb + tìm kiếm + lưới card ─────────────────────
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
 import { usePerms } from '../auth/AuthContext';
+import type { JsonKind } from '@divkitframework/visual-editor/dist/preview.js';
 import type { S3Item } from '../types';
 import { Dots, SkeletonCards } from './Loader';
+import { JsonThumb } from './JsonThumb';
+import { AssetMedia, isPreviewableAsset, isVideoAsset } from './AssetPreview';
 
 function StatusBadge({ status }: { status?: S3Item['status'] }) {
     const map: Record<string, [string, string]> = {
@@ -13,7 +16,7 @@ function StatusBadge({ status }: { status?: S3Item['status'] }) {
         draft: ['var(--amber)', 'Draft'],
         archived: ['#888', 'Archived']
     };
-    const [c, label] = map[status || 'draft'] || map.draft;
+    const [c, label] = map[status || ''] || map.draft;
     return (
         <span className="status">
             <span className="status-dot" style={{ background: c }} /> {label}
@@ -36,8 +39,21 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
     const [err, setErr] = useState<string | null>(null);
     const [q, setQ] = useState('');
     const [deleting, setDeleting] = useState<string | null>(null);
-    // Gom ảnh/video vào 1 "folder" Assets ảo (chỉ hiển thị, không đổi S3).
+    // Assets của CẢ project, không riêng prefix đang mở: ảnh/video hay nằm rải
+    // trong subfolder (images/, videos/), nên gom theo từng thư mục thì mỗi chỗ
+    // thấy một phần. Mở bằng nút trên thanh search.
     const [assetsOpen, setAssetsOpen] = useState(false);
+    // Toàn bộ file của project (đệ quy). Dùng cho hai việc: danh sách Assets, và
+    // biết folder nào chỉ chứa asset để loại khỏi lưới layout.
+    const [projectFiles, setProjectFiles] = useState<S3Item[]>([]);
+    const [projectLoaded, setProjectLoaded] = useState(false);
+    // Loại của từng .json, do JsonThumb báo lên sau khi tải nội dung: tên file
+    // không phân biệt được card DivKit với animation Lottie.
+    const [kinds, setKinds] = useState<Record<string, JsonKind>>({});
+    const noteKind = useCallback(
+        (key: string, kind: JsonKind) => setKinds((prev) => (prev[key] === kind ? prev : { ...prev, [key]: kind })),
+        []
+    );
 
     useEffect(() => {
         let alive = true;
@@ -53,20 +69,55 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         };
     }, [prefix]);
 
-    const filtered = useMemo(
-        () => items.filter((it) => it.name.toLowerCase().includes(q.toLowerCase())),
-        [items, q]
+    const project = path[0] || '';
+
+    useEffect(() => {
+        let alive = true;
+        setProjectFiles([]);
+        setProjectLoaded(false);
+        if (!project) return;
+        s3.listPath(`${project}/`, { recursive: true })
+            .then((res) => alive && setProjectFiles(res))
+            .catch(() => {
+                /* asset chỉ là phần phụ của lưới — lỗi ở đây không nên chặn view.
+                   Không có danh sách thì không ẩn folder nào: thà thừa hơn thiếu. */
+            })
+            .finally(() => alive && setProjectLoaded(true));
+        return () => {
+            alive = false;
+        };
+    }, [project]);
+
+    const projectAssets = useMemo(
+        () => collapseHlsStreams(projectFiles.filter(isAsset)),
+        [projectFiles]
     );
+    const assetFolders = useMemo(
+        () => assetOnlyFolders(projectFiles, prefix),
+        [projectFiles, prefix]
+    );
+
+    const filtered = useMemo(() => filterByName(items, q), [items, q]);
 
     const inProject = path.length >= 1;
     const searching = q.trim().length > 0;
-    const assets = useMemo(() => filtered.filter(isAsset), [filtered]);
-    const nonAssets = useMemo(() => filtered.filter((it) => !isAsset(it)), [filtered]);
+    // Danh sách prefix về trước danh sách đệ quy, mà chỉ danh sách sau mới biết
+    // folder nào chỉ chứa asset. Vẽ sớm là để folder assets nhấp nháy hiện lên
+    // rồi biến mất, nên shimmer giữ tới khi biết đủ để vẽ đúng một lần.
+    const gridLoading = loading || (inProject && !projectLoaded);
+    // Khung chính chỉ có layout: bỏ file asset, và bỏ luôn những folder mà bên
+    // trong không có layout nào (images/, videos/, anim/…) — asset đã có view
+    // riêng gom cả project nên không mất gì.
+    const nonAssets = useMemo(
+        () => filtered.filter((it) => !isAsset(it) &&
+            !(it.type === 'folder' && assetFolders.has(it.name))),
+        [filtered, assetFolders]
+    );
     // Chỉ gom khi đang trong project và không tìm kiếm (tìm kiếm → phẳng để tìm cả asset).
     const grouped = inProject && !searching;
-    const visible = grouped ? (assetsOpen ? assets : nonAssets) : filtered;
-    const showAssetCard = grouped && !assetsOpen && assets.length > 0;
-    const shownCount = visible.length + (showAssetCard ? 1 : 0);
+    const assetsView = grouped && assetsOpen;
+    const visible = assetsView ? filterByName(projectAssets, q) : (grouped ? nonAssets : filtered);
+    const shownCount = visible.length;
 
     function closeAssets() {
         setAssetsOpen(false);
@@ -83,6 +134,7 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         try {
             await s3.deleteObject(it.key);
             setItems((prev) => prev.filter((x) => x.key !== it.key));
+            setProjectFiles((prev) => prev.filter((x) => x.key !== it.key));
         } catch (e) {
             setErr(String((e as Error).message || e));
         } finally {
@@ -90,18 +142,69 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
         }
     }
 
+    // Một card, dùng cho cả lưới layout và các nhóm trong view assets.
+    function renderCard(it: S3Item) {
+        return (
+                <div key={it.name} className="card-wrap">
+                    <button className="card" onClick={() => onOpen(it)}>
+                        <div className={'card-thumb ' + it.type + thumbShape(it, kinds)}>
+                            <CardThumb item={it} project={path[0] || ''} onKind={noteKind} />
+                        </div>
+                        <div className="card-body">
+                            <div className="card-name">
+                                <span className="card-ic">{thumbIcon(it.type)}</span>
+                                {it.name}
+                            </div>
+                            <div className="card-sub">
+                                {it.type === 'folder'
+                                    ? 'Folder'
+                                    : `${fmtSize(it.size)} · ${fmtDate(it.modified)}`}
+                            </div>
+                            {/* Chỉ layout được push qua tool mới có metadata này; một
+                                animation Lottie hay ảnh thì không, nên đừng dán nhãn
+                                "Draft" cho thứ vốn không có vòng đời draft/live. */}
+                            {(it.status || it.version) && (
+                                <div className="card-foot">
+                                    {it.status && <StatusBadge status={it.status} />}
+                                    {it.version && <span className="ver">{it.version}</span>}
+                                </div>
+                            )}
+                        </div>
+                    </button>
+                    {/* Không có nút xoá cho stream HLS: nó là hàng chục object, mà
+                        nút này xoá đúng một key — bấm xong sẽ còn lại một folder
+                        segment mồ côi không ai thấy. */}
+                    {it.type !== 'folder' && it.type !== 'hls' && it.key && perms.delete && (
+                        <button
+                            className="card-del"
+                            title="Xoá file khỏi S3"
+                            disabled={deleting === it.key}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(it);
+                            }}
+                        >
+                            {Icon.trash}
+                        </button>
+                    )}
+                </div>
+        );
+    }
+
     return (
         <main className="browser">
             <header className="b-head">
                 <div className="crumbs">
                     <button className="crumb" onClick={() => { closeAssets(); onCrumb(-1); }}>{BUCKET_LABEL}</button>
-                    {path.map((seg, i) => (
+                    {/* Assets là của cả project, nên khi mở view đó breadcrumb dừng ở
+                        tên project — kéo theo folder đang mở sẽ nói sai phạm vi. */}
+                    {(assetsView ? path.slice(0, 1) : path).map((seg, i) => (
                         <span key={i} className="crumb-wrap">
                             <span className="crumb-sep">{Icon.chevron}</span>
                             <button className="crumb" onClick={() => { closeAssets(); onCrumb(i); }}>{seg}</button>
                         </span>
                     ))}
-                    {grouped && assetsOpen && (
+                    {assetsView && (
                         <span className="crumb-wrap">
                             <span className="crumb-sep">{Icon.chevron}</span>
                             <button className="crumb" onClick={closeAssets}>Assets</button>
@@ -113,6 +216,18 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
                         <span className="search-ic">{Icon.search}</span>
                         <input placeholder="Tìm kiếm…" value={q} onChange={(e) => setQ(e.target.value)} />
                     </div>
+                    {inProject && (
+                        <button
+                            className={'btn ghost sm' + (assetsOpen ? ' active' : '')}
+                            title="Ảnh, video và media của cả project"
+                            onClick={() => setAssetsOpen(!assetsOpen)}
+                        >
+                            {Icon.image} Assets
+                            {projectAssets.length > 0 && (
+                                <span className="btn-count">{projectAssets.length}</span>
+                            )}
+                        </button>
+                    )}
                     {inProject && perms.update && (
                         <button className="btn primary sm" onClick={onNewLayout}>
                             {Icon.plus} New layout
@@ -122,67 +237,22 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
             </header>
 
             <div className="b-meta">
-                {loading ? <Dots label="Đang tải" /> : `${shownCount} mục`}
+                {gridLoading ? <Dots label="Đang tải" /> : `${shownCount} mục`}
                 {err && <span className="b-err"> · Lỗi: {err}</span>}
             </div>
 
-            <div className="cards">
-                {loading && visible.length === 0 && <SkeletonCards n={8} />}
-                {showAssetCard && (
-                    <div className="card-wrap">
-                        <button className="card" onClick={() => setAssetsOpen(true)}>
-                            <div className="card-thumb folder">
-                                <span className="thumb-big">{Icon.folder}</span>
-                            </div>
-                            <div className="card-body">
-                                <div className="card-name">
-                                    <span className="card-ic">{Icon.folder}</span>
-                                    Assets
-                                </div>
-                                <div className="card-sub">{assets.length} ảnh/video</div>
-                            </div>
-                        </button>
-                    </div>
-                )}
-                {visible.map((it) => (
-                    <div key={it.name} className="card-wrap">
-                        <button className="card" onClick={() => onOpen(it)}>
-                            <div className={'card-thumb ' + it.type}>
-                                <CardThumb item={it} prefix={prefix} />
-                            </div>
-                            <div className="card-body">
-                                <div className="card-name">
-                                    <span className="card-ic">{thumbIcon(it.type)}</span>
-                                    {it.name}
-                                </div>
-                                <div className="card-sub">
-                                    {it.type === 'folder'
-                                        ? 'Folder'
-                                        : `${fmtSize(it.size)} · ${fmtDate(it.modified)}`}
-                                </div>
-                                {it.type === 'json' && !it.config && (
-                                    <div className="card-foot">
-                                        <StatusBadge status={it.status} />
-                                        {it.version && <span className="ver">{it.version}</span>}
-                                    </div>
-                                )}
-                            </div>
-                        </button>
-                        {it.type !== 'folder' && it.key && perms.delete && (
-                            <button
-                                className="card-del"
-                                title="Xoá file khỏi S3"
-                                disabled={deleting === it.key}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(it);
-                                }}
-                            >
-                                {Icon.trash}
-                            </button>
-                        )}
-                    </div>
+            <div className="cards-scroll">
+                {gridLoading && <div className="cards"><SkeletonCards n={8} /></div>}
+                {!gridLoading && assetsView && groupAssets(visible).map((group) => (
+                    <section key={group.key} className="asset-group">
+                        <h3 className="asset-group-head">
+                            {group.label}
+                            <span className="asset-group-count">{group.items.length}</span>
+                        </h3>
+                        <div className="cards">{group.items.map(renderCard)}</div>
+                    </section>
                 ))}
+                {!gridLoading && !assetsView && <div className="cards">{visible.map(renderCard)}</div>}
             </div>
         </main>
     );
@@ -190,33 +260,176 @@ export function Browser({ path, onOpen, onCrumb, onNewLayout }: Props) {
 
 const BUCKET_LABEL = 'ik-nocode-paywall';
 
-// Asset = ảnh + file media/khác (mp4…). JSON layout, config, html, folder giữ nguyên.
+/**
+ * Tên những folder con của `prefix` mà cả cây bên dưới không có layout nào.
+ *
+ * Xét theo nội dung chứ không theo tên: một folder tên "videos" vẫn có thể có
+ * layout, và một folder tên bất kỳ vẫn có thể chỉ chứa ảnh. `files` là danh
+ * sách đệ quy của cả project nên phủ được folder lồng nhiều tầng.
+ */
+function assetOnlyFolders(files: S3Item[], prefix: string): Set<string> {
+    const folders = new Set<string>();
+    const withLayout = new Set<string>();
+
+    for (const file of files) {
+        if (!file.key?.startsWith(prefix)) continue;
+        const rest = file.key.slice(prefix.length);
+        const slash = rest.indexOf('/');
+        if (slash < 0) continue; // file nằm ngay tại prefix, không thuộc folder con
+        const folder = rest.slice(0, slash);
+        folders.add(folder);
+        if (!isAsset(file)) withLayout.add(folder);
+    }
+
+    for (const folder of withLayout) {
+        folders.delete(folder);
+    }
+    return folders;
+}
+
+/**
+ * Gộp mỗi stream HLS thành MỘT mục.
+ *
+ * Một stream là cả một folder — master.m3u8, playlist từng rendition, rồi hàng
+ * chục segment .ts — nhưng nó là một video. Trải phẳng ra thì 29 mục rác đè
+ * chết mọi asset khác trong danh sách.
+ *
+ * Gốc của stream là folder chứa .m3u8 NÔNG NHẤT: các rendition
+ * (stream_360p/index.m3u8) nằm dưới nó nên tự động bị gộp vào.
+ */
+function collapseHlsStreams(assets: S3Item[]): S3Item[] {
+    const playlistFolders = assets
+        .filter((it) => it.name.endsWith('.m3u8'))
+        .map((it) => it.name.replace(/\/[^/]+$/, ''))
+        .filter((folder, i, all) => all.indexOf(folder) === i)
+        .sort((a, b) => a.length - b.length);
+    if (!playlistFolders.length) return assets;
+
+    const roots: string[] = [];
+    for (const folder of playlistFolders) {
+        if (!roots.some((root) => folder === root || folder.startsWith(`${root}/`))) {
+            roots.push(folder);
+        }
+    }
+
+    const streams = new Map<string, S3Item>(
+        roots.map((root) => [root, { name: root, type: 'hls' as const, size: 0 }])
+    );
+    const rest: S3Item[] = [];
+
+    for (const item of assets) {
+        const root = roots.find((r) => item.name.startsWith(`${r}/`));
+        if (!root) {
+            rest.push(item);
+            continue;
+        }
+        const stream = streams.get(root)!;
+        stream.size = (stream.size || 0) + (item.size || 0);
+        if (!stream.modified || (item.modified && item.modified > stream.modified)) {
+            stream.modified = item.modified;
+        }
+        // Playlist gốc là chỗ vào của stream — giữ key đó để copy/mở được.
+        if (!stream.key && item.name === `${root}/master.m3u8`) {
+            stream.key = item.key;
+        }
+    }
+    // Không có master.m3u8 thì lấy playlist nông nhất làm chỗ vào.
+    for (const [root, stream] of streams) {
+        if (stream.key) continue;
+        stream.key = assets.find(
+            (it) => it.name.startsWith(`${root}/`) && it.name.endsWith('.m3u8')
+        )?.key;
+    }
+
+    return [...rest, ...streams.values()];
+}
+
+/**
+ * Assets chia theo loại. Một project có thể có tám mươi mấy file trộn lẫn,
+ * mà tìm một cái ảnh và tìm một cái animation là hai việc khác nhau.
+ *
+ * "Khác" phải có để không file nào biến mất: .m3u8, .zip… đều rơi vào đây.
+ */
+const ASSET_GROUPS: { key: string; label: string; match(it: S3Item): boolean }[] = [
+    { key: 'image', label: 'Ảnh', match: (it) => it.type === 'image' },
+    { key: 'video', label: 'Video', match: isVideoAsset },
+    { key: 'lottie', label: 'Animation', match: (it) => it.type === 'lottie' },
+    { key: 'other', label: 'Khác', match: () => true }
+];
+
+function groupAssets(items: S3Item[]) {
+    const groups = ASSET_GROUPS.map((g) => ({ ...g, items: [] as S3Item[] }));
+    for (const item of items) {
+        // Nhóm đầu tiên khớp thắng, nên 'other' ở cuối là chỗ hứng phần còn lại.
+        groups.find((g) => g.match(item))?.items.push(item);
+    }
+    return groups.filter((g) => g.items.length > 0);
+}
+
+function filterByName(items: S3Item[], q: string): S3Item[] {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((it) => it.name.toLowerCase().includes(needle));
+}
+
+// Asset = ảnh, media (mp4…) và animation Lottie. Lottie là .json nhưng không
+// phải layout: nó là nguyên liệu của layout, nên thuộc Assets.
+// Card DivKit, config, html, folder giữ nguyên trong lưới.
 function isAsset(it: S3Item): boolean {
-    return it.type === 'image' || it.type === 'other';
+    return it.type === 'image' || it.type === 'other' || it.type === 'lottie';
+}
+
+// config.json không phải card DivKit nên không dựng được preview.
+function hasPreview(it: S3Item): boolean {
+    return (it.type === 'json' || it.type === 'lottie') && !it.config && Boolean(it.key);
 }
 
 function thumbIcon(type: S3Item['type']) {
     if (type === 'folder') return Icon.folder;
     if (type === 'image') return Icon.image;
     if (type === 'html') return Icon.html;
+    if (type === 'lottie' || type === 'other' || type === 'hls') return Icon.media;
     return Icon.json;
 }
 
-// Thumbnail: ảnh thật resolve qua presign/CDN; còn lại dùng icon lớn.
-function CardThumb({ item, prefix }: { item: S3Item; prefix: string }) {
-    const [src, setSrc] = useState<string | null>(null);
-    useEffect(() => {
-        let alive = true;
-        if (item.type === 'image' && item.key) {
-            s3.getAssetUrl(item.key).then((u) => alive && setSrc(u)).catch(() => {});
-        }
-        return () => {
-            alive = false;
-        };
-    }, [item, prefix]);
+/**
+ * Tỉ lệ tile theo loại nội dung: card DivKit lấy khung điện thoại để fit trọn
+ * màn, còn lại giữ tile ngắn.
+ *
+ * Loại chỉ biết được sau khi tải nội dung, nên mặc định là khung điện thoại —
+ * phần lớn .json trong bucket là layout, đoán như vậy thì ít tile phải nhảy
+ * kích thước nhất.
+ */
+function thumbShape(it: S3Item, kinds: Record<string, JsonKind>): string {
+    if (!hasPreview(it) || !it.key) return '';
+    if (it.type === 'lottie') return ' anim';
+    // Server đoán theo 512 byte đầu; kinds[] là kết quả đọc trọn file lúc
+    // render, nên nó thắng khi hai bên lệch nhau.
+    const kind = kinds[it.key];
+    if (kind === 'lottie' || kind === 'unknown') return ' anim';
+    return ' live';
+}
 
-    if (item.type === 'image') {
-        return src ? <img src={src} alt={item.name} /> : <span className="thumb-big">{Icon.image}</span>;
+// Thumbnail: json render thu nhỏ (card DivKit hoặc animation Lottie); ảnh và
+// video lấy từ CDN; còn lại icon lớn.
+function CardThumb({ item, project, onKind }: {
+    item: S3Item;
+    project: string;
+    onKind(key: string, kind: JsonKind): void;
+}) {
+    const key = item.key;
+    if (hasPreview(item) && key) {
+        return (
+            <JsonThumb
+                itemKey={key}
+                project={project}
+                fallback={Icon.json}
+                onKind={(kind) => onKind(key, kind)}
+            />
+        );
+    }
+    if (isPreviewableAsset(item)) {
+        return <AssetMedia item={item} fallback={thumbIcon(item.type)} />;
     }
     return <span className="thumb-big">{thumbIcon(item.type)}</span>;
 }

@@ -403,5 +403,10 @@ export const DivProEditor = {
     }
 };
 
+export { renderCardPreview, renderLottiePreview, detectJsonKind } from './lib/data/cardPreview';
+export type {
+    CardPreviewOptions, CardPreviewInstance, JsonKind,
+    LottiePreviewOptions, LottiePreviewInstance
+} from './lib/data/cardPreview';
 export { convertDictToPalette, convertPaletteToDict } from './lib/utils/convertPalette';
 export { addTemplatesSuffix, removeTemplatesSuffix } from './lib/utils/renameTemplates';

@@ -134,9 +134,14 @@ function Shell() {
                     setActiveFile(null);
                     setView('browser');
                     setHtmlFile(hit);
-                } else {
+                } else if (hit.type === 'json') {
                     setActiveFile(hit);
                     setView('preview');
+                } else {
+                    // URL trỏ vào một asset (video, animation): không có editor
+                    // cho nó, nên mở thư mục chứa thay vì một editor rỗng.
+                    setActiveFile(null);
+                    setView('browser');
                 }
             } else {
                 setPath(segments);
@@ -203,10 +208,12 @@ function Shell() {
             setView('browser');
         } else if (it.type === 'image') setImageFile(it);
         else if (it.type === 'html') setHtmlFile(it);
-        else {
+        else if (it.type === 'json') {
             setActiveFile(it);
             setView('preview');
         }
+        // Còn lại là asset (video, HLS, animation Lottie): editor layout không mở
+        // được chúng — trước đây nhánh else nuốt hết và mở editor rỗng.
     }
     function gotoProject(name: string) {
         setPath([name]);
