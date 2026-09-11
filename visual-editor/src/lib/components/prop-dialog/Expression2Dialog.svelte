@@ -9,9 +9,11 @@
     const { l10nString } = getContext<LanguageContext>(LANGUAGE_CTX);
     const { themeStore } = state;
 
-    $: if (isShown && currentProps && !currentProps.disabled && currentProps.callback) {
-        currentProps.callback(currentProps.value);
-    }
+    // Không bắn callback lúc mở. Các dialog khác (Link2, Tanker2) giữ value ở
+    // biến bind với <input> nên câu reactive này chính là đường báo thay đổi;
+    // ở đây value nằm trong CodeMirror và đã có onChange lo, nên nó chỉ ghi lại
+    // đúng giá trị cũ: file bị đánh dấu sửa, đẩy một bước undo rỗng, và preview
+    // render lại dù người dùng mới chỉ NHÌN biểu thức.
 
     export function show(props: Expression2ShowProps): void {
         currentProps = props;
