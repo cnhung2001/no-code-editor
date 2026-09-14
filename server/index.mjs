@@ -38,6 +38,7 @@ import { DB_ENABLED, ensureSchema } from './db.mjs';
 import { auditMiddleware, search as searchAudit } from './audit.mjs';
 import { accessiblePrefixes } from './project-scope.mjs';
 import { DRAFT_SEGMENT, draftKey, draftPrefix } from './draft-key.mjs';
+import { isGeminiConfigured, translateGemini } from './mt-gemini.mjs';
 import {
     createProject,
     deleteProject,
@@ -65,12 +66,14 @@ const {
     // Vite dev server mà gateway proxy tới khi chạy local.
     VITE_DEV_URL = 'http://localhost:5173',
     // ── Machine translation (i18n auto-translate) ──
-    // 'stub'     → trả "[locale] text" (mặc định, không gọi API ngoài)
-    // 'rc-admin' → gọi service MT của rc-admin (bulk-suggest)
-    MT_PROVIDER = 'stub',
-    RC_ADMIN_BASE_URL = '',
-    RC_ADMIN_TOKEN = '',
-    RC_ADMIN_PROJECT_ID = ''
+    // Chỉ còn MỘT engine thật: Gemini qua gateway core-ai, đúng cách cms-admin
+    // dịch (§mt-gemini.mjs). 'google' và 'rc-admin' đã comment lại bên dưới.
+    // Giá trị duy nhất còn tác dụng là 'stub' — trả "[locale] text" để chạy UI
+    // khi chưa có key. Để trống → gemini nếu có GEMINI_API_KEY, không thì route
+    // /api/translate trả 503 chứ KHÔNG lặng lẽ rơi về stub.
+    MT_PROVIDER = ''
+    // RC_ADMIN_BASE_URL, RC_ADMIN_TOKEN, RC_ADMIN_PROJECT_ID: theo provider
+    // rc-admin đã tắt.
 } = process.env;
 
 const s3 = new S3Client({ region: AWS_REGION });
@@ -695,94 +698,112 @@ function translateStub(text, targets) {
     return translations;
 }
 
-// google: endpoint dịch free (không cần key). 1 target/lần → chạy song song có giới hạn.
-// Một số mã ngôn ngữ cần map cho Google.
-const GOOGLE_LANG_MAP = { zh: 'zh-CN', he: 'iw', nb: 'no', vn: 'vi' };
-async function translateOneGoogle(text, from, to) {
-    const tl = GOOGLE_LANG_MAP[to] || to;
-    const sl = GOOGLE_LANG_MAP[from] || from;
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`google ${r.status}`);
-    const data = await r.json();
-    // data[0] = mảng segment [ [đã_dịch, gốc, …], … ] → nối lại.
-    return (data[0] || []).map((seg) => seg[0]).filter(Boolean).join('');
-}
-async function translateGoogle(text, from, targets) {
-    const out = {};
-    const CONCURRENCY = 6;
-    let idx = 0;
-    async function worker() {
-        while (idx < targets.length) {
-            const to = targets[idx++];
-            try {
-                out[to] = await translateOneGoogle(text, from, to);
-            } catch {
-                // bỏ qua ngôn ngữ lỗi → để trống, không chặn cả batch
-            }
-        }
-    }
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
-    return out;
-}
+// ── TẮT: google (endpoint dịch free) ─────────────────────────────────────
+// Bỏ dùng vì hai lý do, không phải vì thích gemini hơn:
+//  1. translate.googleapis.com/translate_a/single là endpoint nội bộ của
+//     Google Translate web, không có hợp đồng gì — đo được 429 ngay.
+//  2. Vòng lặp dưới NUỐT lỗi từng locale để không chặn cả batch, nên 429 đi ra
+//     thành HTTP 200 với dict rỗng: nút Localize chạy xong mà ô dịch trống,
+//     không một dòng lỗi. Đó chính là bug localize đang gặp.
+// Giữ code lại để còn đối chiếu; muốn bật lại thì bỏ comment cả khối này,
+// nhánh 'google' trong effectiveMtProvider() và case trong /api/translate.
+// // google: endpoint dịch free (không cần key). 1 target/lần → chạy song song có giới hạn.
+// // Một số mã ngôn ngữ cần map cho Google.
+// const GOOGLE_LANG_MAP = { zh: 'zh-CN', he: 'iw', nb: 'no', vn: 'vi' };
+// async function translateOneGoogle(text, from, to) {
+//     const tl = GOOGLE_LANG_MAP[to] || to;
+//     const sl = GOOGLE_LANG_MAP[from] || from;
+//     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`;
+//     const r = await fetch(url);
+//     if (!r.ok) throw new Error(`google ${r.status}`);
+//     const data = await r.json();
+//     // data[0] = mảng segment [ [đã_dịch, gốc, …], … ] → nối lại.
+//     return (data[0] || []).map((seg) => seg[0]).filter(Boolean).join('');
+// }
+// async function translateGoogle(text, from, targets) {
+//     const out = {};
+//     const CONCURRENCY = 6;
+//     let idx = 0;
+//     async function worker() {
+//         while (idx < targets.length) {
+//             const to = targets[idx++];
+//             try {
+//                 out[to] = await translateOneGoogle(text, from, to);
+//             } catch {
+//                 // bỏ qua ngôn ngữ lỗi → để trống, không chặn cả batch
+//             }
+//         }
+//     }
+//     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
+//     return out;
+// }
 
-// rc-admin: gọi POST /v1/projects/:pid/i18n/bulk-suggest.
-// ⚠ Payload/response dưới đây là DỰ KIẾN — chỉnh lại đúng DTO khi có mt.controller.ts.
-async function translateRcAdmin(text, from, targets, opts) {
-    const base = RC_ADMIN_BASE_URL.replace(/\/$/, '');
-    const url = `${base}/v1/projects/${RC_ADMIN_PROJECT_ID}/i18n/bulk-suggest`;
-    const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(RC_ADMIN_TOKEN ? { Authorization: `Bearer ${RC_ADMIN_TOKEN}` } : {})
-        },
-        // TODO(schema): map đúng field khi có DTO của bulk-suggest.
-        body: JSON.stringify({
-            sourceLocale: from,
-            targetLocales: targets,
-            items: [{ key: 'inline', source: text }],
-            tone: opts?.tone,
-            maxLength: opts?.maxLength
-        })
-    });
-    if (!resp.ok) throw new Error(`rc-admin ${resp.status}: ${await resp.text()}`);
-    const data = await resp.json();
-    // TODO(schema): trích đúng theo response thật. Dạng dự kiến:
-    //   { results: [{ key, translations: { <locale>: <text> } }] }
-    const translations = data?.results?.[0]?.translations || data?.translations || {};
-    return translations;
-}
+// ── TẮT: rc-admin ────────────────────────────────────────────────────────
+// Chưa bao giờ chạy được: endpoint /i18n/bulk-suggest không tồn tại ở cms-admin.
+// Route dịch thật bên đó là POST /api/internal/projects/:id/translations/translate
+// (1 target/lượt, auth bằng cookie `auth_token`) — nhưng mình không cần đi vòng
+// qua nó, thứ duy nhất cần là engine Gemini, xem mt-gemini.mjs.
+// // rc-admin: gọi POST /v1/projects/:pid/i18n/bulk-suggest.
+// // ⚠ Payload/response dưới đây là DỰ KIẾN — chỉnh lại đúng DTO khi có mt.controller.ts.
+// async function translateRcAdmin(text, from, targets, opts) {
+//     const base = RC_ADMIN_BASE_URL.replace(/\/$/, '');
+//     const url = `${base}/v1/projects/${RC_ADMIN_PROJECT_ID}/i18n/bulk-suggest`;
+//     const resp = await fetch(url, {
+//         method: 'POST',
+//         headers: {
+//             'Content-Type': 'application/json',
+//             ...(RC_ADMIN_TOKEN ? { Authorization: `Bearer ${RC_ADMIN_TOKEN}` } : {})
+//         },
+//         // TODO(schema): map đúng field khi có DTO của bulk-suggest.
+//         body: JSON.stringify({
+//             sourceLocale: from,
+//             targetLocales: targets,
+//             items: [{ key: 'inline', source: text }],
+//             tone: opts?.tone,
+//             maxLength: opts?.maxLength
+//         })
+//     });
+//     if (!resp.ok) throw new Error(`rc-admin ${resp.status}: ${await resp.text()}`);
+//     const data = await resp.json();
+//     // TODO(schema): trích đúng theo response thật. Dạng dự kiến:
+//     //   { results: [{ key, translations: { <locale>: <text> } }] }
+//     const translations = data?.results?.[0]?.translations || data?.translations || {};
+//     return translations;
+// }
 
 app.post('/api/translate', async (req, res) => {
-    const { text, from = 'en', targets, tone, maxLength } = req.body || {};
+    // tone/maxLength: client vẫn gửi được (xem src/mt.ts) nhưng không nhánh nào
+    // dùng nữa sau khi tắt rc-admin — bỏ khỏi destructure cho khỏi hiểu nhầm.
+    const { text, from = 'en', targets } = req.body || {};
     if (!text || !Array.isArray(targets) || !targets.length) {
         return res.status(400).send('thiếu text hoặc targets[]');
     }
     // Không dịch về chính ngôn ngữ nguồn.
     const tgts = targets.filter((l) => l && l !== from);
+    if (!tgts.length) return res.json({ translations: {} });
+    const provider = effectiveMtProvider();
+    // Thiếu key thì nói thẳng. Rơi về stub ở đây là cái bẫy cũ: request 200,
+    // layout đầy "[vi] Play", không ai biết là chưa cấu hình gì.
+    if (provider === 'none') {
+        return res.status(503).send('Chưa cấu hình dịch: thiếu GEMINI_API_KEY trong server/.env');
+    }
     try {
-        let translations;
-        // Fallback về stub nếu chọn rc-admin nhưng chưa cấu hình (mirror pattern của rc-admin).
-        if (MT_PROVIDER === 'rc-admin' && RC_ADMIN_BASE_URL && RC_ADMIN_PROJECT_ID) {
-            translations = await translateRcAdmin(text, from, tgts, { tone, maxLength });
-        } else if (MT_PROVIDER === 'google') {
-            translations = await translateGoogle(text, from, tgts);
-        } else {
-            translations = translateStub(text, tgts);
-        }
+        const translations = provider === 'gemini'
+            ? await translateGemini(text, from, tgts)
+            : translateStub(text, tgts);
         res.json({ translations });
     } catch (e) {
         res.status(502).send(String(e.message || e));
     }
 });
 
-// Provider MT thực tế đang chạy: khai 'rc-admin' mà thiếu base URL/project thì
-// rơi về stub — nên chỗ nào cần hiển thị đều đi qua đây, không in env thô.
+// Provider MT thực tế đang chạy — chỗ nào cần hiển thị đều đi qua đây, không
+// in env thô: khai 'gemini' mà thiếu key thì cái chạy thật không phải 'gemini'.
+// 'none' = chưa cấu hình được gì; route dịch trả 503 thay vì im lặng.
 function effectiveMtProvider() {
-    if (MT_PROVIDER === 'rc-admin' && RC_ADMIN_BASE_URL && RC_ADMIN_PROJECT_ID) return 'rc-admin';
-    if (MT_PROVIDER === 'google') return 'google';
-    return 'stub';
+    if (MT_PROVIDER === 'stub') return 'stub';
+    if (isGeminiConfigured()) return 'gemini';
+    return 'none';
 }
 
 // ── Admin: mapping folder bucket ↔ project authz ──────────────────────────
@@ -896,6 +917,11 @@ if (IS_DEV) {
 await ensureSchema().catch((err) => {
     console.warn('[db] ensureSchema hỏng:', err.message);
 });
+
+// Kêu ngay lúc boot thay vì để người ta phát hiện qua nút Localize.
+if (effectiveMtProvider() === 'none') {
+    console.warn('[mt] Thiếu GEMINI_API_KEY → nút Localize sẽ trả 503. Đặt GEMINI_API_KEY trong server/.env (hoặc MT_PROVIDER=stub để chạy UI offline).');
+}
 
 const server = app.listen(Number(PORT), () => {
     console.log(
