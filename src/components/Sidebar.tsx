@@ -3,7 +3,6 @@ import { Icon } from '../lib/icons';
 import { UserMenu } from '../auth/UserMenu';
 import type { ProjectInfo, S3Item } from '../types';
 import { SkeletonRows } from './Loader';
-import { openGuide } from '../lib/guide';
 
 const BUCKET = 'ik-nocode-paywall';
 const REGION = 'ap-southeast-1';
@@ -25,6 +24,7 @@ interface Props {
     /** Quyền cấp system — chỉ để ẩn/hiện mục Admin, backend vẫn tự gate. */
     canAdmin?: boolean;
     onAdmin?(): void;
+    onGuide(): void;
 }
 
 export function Sidebar({
@@ -35,7 +35,8 @@ export function Sidebar({
     onFile,
     onRoot,
     canAdmin,
-    onAdmin
+    onAdmin,
+    onGuide
 }: Props) {
     return (
         <aside className="sidebar">
@@ -95,7 +96,7 @@ export function Sidebar({
             )}
 
             <div className="sidebar-foot">
-                <button className="tree-item" onClick={() => openGuide()}>
+                <button className="tree-item" onClick={onGuide}>
                     <span className="tree-ic">{Icon.info}</span>
                     <span className="tree-name">Hướng dẫn</span>
                 </button>

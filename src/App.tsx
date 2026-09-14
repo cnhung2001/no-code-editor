@@ -10,6 +10,9 @@ const LayoutPreview = lazy(() => import('./components/LayoutPreview').then((m) =
 const Builder = lazy(() => import('./components/Builder').then((m) => ({ default: m.Builder })));
 // Màn admin chỉ vài người mở → tách chunk, không nằm trong bundle chính.
 const AdminScreen = lazy(() => import('./admin/AdminScreen').then((m) => ({ default: m.AdminScreen })));
+// Hướng dẫn là một tài liệu tĩnh trong iframe — nhẹ, nhưng cũng không có lý
+// do nằm trong bundle khởi động của người chưa bao giờ mở nó.
+const HelpScreen = lazy(() => import('./components/HelpScreen').then((m) => ({ default: m.HelpScreen })));
 import { HtmlModal } from './components/modals/HtmlModal';
 import { PushModal } from './components/modals/PushModal';
 import { CachePurgeToast } from './components/CachePurgeToast';
@@ -18,6 +21,7 @@ import { AuthProvider, useAuth, useProjectPerms } from './auth/AuthContext';
 import { LoginScreen } from './auth/LoginScreen';
 import { buildUrl, parseUrl } from './lib/route';
 import type { ProjectInfo, S3Item, LayoutMeta } from './types';
+import type { GuideAnchor } from './lib/guide';
 
 type View = 'browser' | 'preview' | 'builder';
 
@@ -66,6 +70,10 @@ function Shell() {
     // không phải vị trí trong bucket nên buildUrl chặn nó trước, còn `path` vẫn
     // giữ chỗ cũ để đóng Admin là quay về đúng chỗ đang đứng.
     const [showAdmin, setShowAdmin] = useState(false);
+    // Cùng lý do với Admin: hướng dẫn không phải một vị trí trong bucket nên nó
+    // đứng ngoài phần đồng bộ URL↔state. `null` = đang không mở.
+    const [helpAnchor, setHelpAnchor] = useState<GuideAnchor | null | undefined>(undefined);
+    const openHelp = (anchor?: GuideAnchor) => setHelpAnchor(anchor ?? null);
     const [view, setView] = useState<View>('browser');
     const [activeFile, setActiveFile] = useState<S3Item | null>(null);
     const [isNew, setIsNew] = useState(false);
@@ -284,6 +292,19 @@ function Shell() {
           ? 'Sửa & lưu draft được · không có quyền publish'
           : null;
 
+    if (helpAnchor !== undefined) {
+        return (
+            <div className="nc-app nc-app--no-sidebar">
+                <Suspense fallback={<Loader label="Đang mở hướng dẫn…" />}>
+                    <HelpScreen
+                        anchor={helpAnchor ?? undefined}
+                        onBack={() => setHelpAnchor(undefined)}
+                    />
+                </Suspense>
+            </div>
+        );
+    }
+
     if (showAdmin && isSystemAdmin) {
         return (
             <div className="nc-app nc-app--no-sidebar">
@@ -306,6 +327,7 @@ function Shell() {
                     onRoot={gotoRoot}
                     canAdmin={isSystemAdmin}
                     onAdmin={() => setShowAdmin(true)}
+                    onGuide={() => openHelp()}
                 />
             )}
 
@@ -323,6 +345,7 @@ function Shell() {
                         file={activeFile}
                         onBack={() => setView('browser')}
                         onPush={(raw, meta) => activeFile.key && setPushTarget({ key: activeFile.key, body: raw, meta })}
+                        onGuide={openHelp}
                     />
                 </Suspense>
             )}
@@ -338,6 +361,7 @@ function Shell() {
                             setView(activeFile ? 'preview' : 'browser');
                         }}
                         onPush={(raw, key, meta) => setPushTarget({ key, body: raw, meta })}
+                        onGuide={openHelp}
                     />
                 </Suspense>
             )}
