@@ -234,12 +234,15 @@
   <figcaption>Luồng làm việc của NoCode Preview: duyệt → sửa → lưu nháp / xuất bản → S3/CDN → tới app người dùng mà không cần lên store.</figcaption>
   </figure>
 
+  <h3>Đăng nhập</h3>
+  <p>Mở địa chỉ ở trên là app hỏi đăng nhập trước. Tài khoản và quyền lấy từ hệ thống phân quyền chung của công ty, và <strong>quyền được cấp theo từng project</strong> — có thể bạn sửa được project này mà chỉ xem được project kia. Danh sách project ở cột trái cũng chỉ hiện những chỗ bạn được vào.</p>
+
   <h3>Ba màn hình chính</h3>
   <table>
     <thead><tr><th>Màn</th><th>Dùng để</th></tr></thead>
     <tbody>
       <tr><td><strong>① Browser</strong> (duyệt)</td><td>Cột trái hiện bucket <code>ik-nocode-paywall</code> (region <code>ap-southeast-1</code>) và danh sách <strong>Projects</strong> kèm số layout. Khu giữa là breadcrumb + ô tìm kiếm + lưới thẻ layout. Mỗi thẻ ghi tên, <strong>trạng thái</strong> (Live/Draft/Archived), version, kích thước, ngày sửa. Mở thư mục để đi sâu; mở file <code>.json</code> để xem; ảnh/HTML mở cửa sổ xem nhanh.</td></tr>
-      <tr><td><strong>② Preview</strong> (xem &amp; sửa nhanh)</td><td>Mở một layout và hiển thị <strong>render thật</strong> bằng DivKit editor (sửa được). Thanh trên có: ← quay lại, tên file (dấu <code>*</code> nếu có thay đổi chưa lưu), <strong>Metadata</strong>, <strong>Download</strong>, <strong>Save draft</strong>, <strong>Push to S3</strong>.</td></tr>
+      <tr><td><strong>② Preview</strong> (xem &amp; sửa nhanh)</td><td>Mở một layout và hiển thị <strong>render thật</strong> bằng DivKit editor (sửa được). Thanh trên có: ← quay lại, tên file (dấu <code>*</code> nếu có thay đổi chưa lưu), <strong>Metadata</strong>, <strong>Preview</strong> (mở cửa sổ dùng thử như máy thật), <strong>Download</strong>, <strong>Hướng dẫn</strong>, <strong>Save draft</strong>, <strong>Push to S3</strong>.</td></tr>
       <tr><td><strong>③ Builder</strong> (sửa đầy đủ)</td><td>Trình sửa đầy đủ: cây khối + preview + bảng thuộc tính/code, palette, hoàn tác/làm lại — chính là DivKit Visual Editor mà các phần 2–14 của tài liệu này mô tả. Đổi được tên layout, rồi <strong>Save draft</strong> / <strong>Push to S3</strong>. Bấm <strong>New layout</strong> ở Browser sẽ mở Builder với một màn trống (Container dọc, nền trắng).</td></tr>
     </tbody>
   </table>
@@ -252,21 +255,21 @@
   </ul>
 
   <h3>Lưu nháp vs Xuất bản</h3>
-  <p><strong>Save draft</strong> ghi bản nháp lên S3 (trạng thái <em>draft</em>) — chưa ảnh hưởng app thật, để bạn lưu tạm và xem lại.</p>
+  <p><strong>Save draft</strong> ghi vào một chỗ riêng — <code>&lt;project&gt;/.drafts/&lt;tên file&gt;</code> — <strong>không đụng vào file mà app đang đọc</strong>. Cứ lưu giữa chừng thoải mái. Thẻ layout nào có nháp sẽ được đánh dấu để bạn biết còn việc dở.</p>
   <p><strong>Push to S3</strong> mở hộp xác nhận trước khi phát hành, gồm:</p>
   <ul>
     <li><strong>Target</strong> — đường dẫn S3 sẽ ghi (ví dụ <code>s3://ik-nocode-paywall/&lt;project&gt;/&lt;layout&gt;.json</code>).</li>
     <li><strong>Thay đổi</strong> — so sánh bản cũ và bản mới (diff) để bạn rà trước khi ghi.</li>
     <li><strong>Commit message</strong> — ghi chú thay đổi (ví dụ "tăng giá yearly, đổi hero").</li>
     <li>☑ <strong>Bump version &amp; giữ bản cũ để rollback</strong> — tạo phiên bản mới, giữ bản cũ để quay lui khi cần.</li>
-    <li>☑ <strong>Invalidate CDN cache sau khi publish</strong> — làm mới CDN để thay đổi tới người dùng ngay.</li>
+    <li>☑ <strong>Xoá cache CDN sau khi publish</strong> — bắt CDN vứt bản cũ đi. Mất khoảng 25 giây và <strong>chạy ở nền</strong>: hộp Push đóng ngay, kết quả hiện ở góc màn hình. Layout mới thì ô này tự bỏ qua — chưa có gì trong cache để xoá. Xem phần 14.</li>
   </ul>
   <div class="callout warn"><div class="h">Đây là thao tác ghi thật lên S3</div><strong>Push to S3</strong> và <strong>Delete</strong> tác động trực tiếp lên dữ liệu thật. Hãy rà phần diff trước khi Publish; nếu lỡ, dùng bản version cũ để rollback. Khi chỉ muốn thử, hãy dùng chế độ an toàn bên dưới.</div>
 
   <h3>Chế độ an toàn &amp; cấu hình</h3>
   <ul>
     <li><strong>Mock mode</strong> (<code>VITE_USE_MOCK=true</code>): dùng dữ liệu giả, không gọi S3 — tập làm quen thoải mái. Có dải băng "MOCK MODE" trên đầu.</li>
-    <li><strong>Chỉ xem</strong> (<code>VITE_ALLOW_PUSH=false</code>): ẩn các nút ghi (Push/Save/Delete/New) — chỉ xem và sửa thử, không đụng S3. Có nhãn "Chế độ chỉ xem".</li>
+    <li><strong>Quyền của bạn</strong>: các nút ghi hiện hay ẩn là do <strong>quyền được cấp trên từng project</strong>, không phải một cài đặt bạn tự bật. Nếu trên đầu màn có nhãn <em>"Chế độ chỉ xem · không ghi S3"</em> hoặc <em>"Sửa &amp; lưu draft được · không có quyền publish"</em> thì đó là quyền của tài khoản bạn — cần thêm quyền thì hỏi người quản trị. Ẩn nút chỉ là cho đỡ vướng mắt; máy chủ vẫn chặn độc lập.</li>
     <li><strong>Định dạng lưu</strong> (<code>VITE_SAVE_FORMAT</code>): <code>plain</code> (DivKit thuần — tương thích client cũ) hoặc <code>wrapper</code> (<code>{screen_id, label, remote_layout, variables}</code>). <em>Cần xác nhận với team mobile dùng định dạng nào.</em></li>
   </ul>
 
@@ -275,7 +278,7 @@
   <p>Màn hình Builder chia làm <strong>3 khu vực chính</strong>, giống mọi trình thiết kế trực quan:</p>
 
   <div class="diagram">┌──────────────────────────────────────────────────────────────────────┐
-│  Thanh công cụ:  [375x812 ▼] [☀/🌙] [↶ ↷]  [0 ✕  0 ⚠]      [Figma] [Save] │
+│  Thanh công cụ:  [375x812 ▼] [🌐 ngôn ngữ] [☀/🌙] [↶ ↷]  [0 ✕  0 ⚠]      │
 ├───────────────┬───────────────────────────────┬──────────────────────┤
 │  ① CÂY        │      ② KHUNG XEM TRƯỚC         │   ③ BẢNG THUỘC TÍNH    │
 │  COMPONENTS   │         (canvas)              │                       │
@@ -286,7 +289,7 @@
 │      ├ Text   │     │  [Start Trial]│         │   • Màu, viền, chữ    │
 │      └ State  │     └───────────────┘         │   • Hành động         │
 └───────────────┴───────────────────────────────┴──────────────────────┘
-  (Tab trái dọc: Components · Palette · Variable · Timers · Products · Tanker)</div>
+  (Tab trái dọc: Components · Palette · Variable · Timers · Products · Localization)</div>
 
   <figure class="shot">
     <img src="images/builder-01-tong-quan.jpg" alt="Toàn cảnh Builder">
@@ -308,7 +311,7 @@
       <tr><td><strong>Variable</strong></td><td>Khai báo và quản lý <em>biến</em> (chữ đa ngôn ngữ, màu, link ảnh...). Xem phần 7.</td></tr>
       <tr><td><strong>Timers</strong></td><td>Hẹn giờ: ví dụ 3 giây mới hiện nút đóng. Xem phần 10.</td></tr>
       <tr><td><strong>Products</strong></td><td>Khai báo các gói mua (IAP) để lấy giá thật. Xem phần 8.</td></tr>
-      <tr><td><strong>Tanker</strong></td><td>Quản lý chuỗi dịch / khoá ngôn ngữ.</td></tr>
+      <tr><td><strong>Localization</strong></td><td>Bảng dịch: mỗi dòng là một câu chữ, mỗi cột là một ngôn ngữ. Chỉ hiện những biến <code>dict</code> bạn đã đánh dấu là i18n. Xem phần 7.</td></tr>
     </tbody>
   </table>
 
@@ -322,8 +325,8 @@
     <li><span class="pill">☀ / 🌙</span> Bật/tắt <strong>chế độ sáng–tối</strong> để xem màn hình ở cả hai nền.</li>
     <li><span class="pill">↶ ↷</span> <strong>Hoàn tác / Làm lại</strong> (<span class="kbd">Ctrl/⌘ + Z</span>). Cứ mạnh dạn thử, sai thì hoàn tác.</li>
     <li><span class="pill">0 ✕ &nbsp; 0 ⚠</span> Số <strong>lỗi</strong> (đỏ) và <strong>cảnh báo</strong> (vàng). Phải đưa lỗi về 0 trước khi lưu.</li>
-    <li><span class="pill">Figma</span> Nhập màn hình từ thiết kế Figma.</li>
-    <li><span class="pill">Save</span> Lưu lại. Xem phần 14.</li>
+    <li><span class="pill">🌐</span> Chọn <strong>ngôn ngữ xem trước</strong>. Đổi nhanh để soát bản dịch mà không phải sửa biến.</li>
+    <li><strong>Không có nút Save ở thanh này.</strong> Việc lưu nằm ở thanh trên cùng của NoCode Preview — <span class="pill">Save draft</span> và <span class="pill">Push to S3</span>. Xem phần 14.</li>
   </ul>
 
   <!-- 3 -->
@@ -438,7 +441,7 @@ text_color: #FFFFFF · font_size_unit: dp</code></pre>
           <path d="M40 120 L100 74 L140 104 L180 70 L220 110 L220 134 L40 134 Z" fill="#4c1d95" opacity="0.6"/>
         </svg>
         <pre><code>image_url: @{url_image_hero}
-scale: fill   (fill / fit / no_scale)</code></pre>
+scale: fill   (fill / fit / no_scale / stretch)</code></pre>
       </div>
     </div>
 
@@ -851,6 +854,33 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
     </tbody>
   </table>
 
+  <div class="callout danger"><div class="h">Đừng tin danh sách gợi ý trong ô Action</div>
+    Ô chọn action của Builder còn đề xuất <code>div-action://purchase</code>, <code>div-action://close</code>,
+    <code>div-action://restore</code>, <code>div-action://open_url</code> — <strong>không có cái nào trong số đó
+    được app dùng</strong> (đã dò toàn bộ 633 file trong bucket: 0 lần xuất hiện). Chọn từ danh sách đó là ra
+    một nút bấm không làm gì cả, mà preview cũng không báo lỗi. Hãy <strong>gõ tay</strong> theo đúng bảng
+    bên trên.
+  </div>
+
+  <h3>Các action khác đang được dùng thật</h3>
+  <p>Ngoài bảng chuẩn trên, layout trong bucket còn dùng những action sau. Gặp thì đừng sửa bừa — chúng do app xử lý:</p>
+  <table>
+    <thead><tr><th>Hành động</th><th>Làm gì</th></tr></thead>
+    <tbody>
+      <tr><td><code>div-action://timer?action=…&amp;id=…</code></td><td>Chạy/dừng/huỷ một hẹn giờ. Xem phần 10.</td></tr>
+      <tr><td><code>div-action://set_next_item</code> · <code>set_current_item</code></td><td>Chuyển trang trong Pager (màn onboarding nhiều bước).</td></tr>
+      <tr><td><code>div-action://ik-nav/navigate?screen_id=…</code></td><td>Sang một màn khác trong luồng onboarding.</td></tr>
+      <tr><td><code>div-action://ik-nav/emit?name=…</code></td><td>Báo một sự kiện lên app (ví dụ màn đã hiện) để app ghi nhận hoặc đo đạc.</td></tr>
+      <tr><td><code>div-action://paywall/contact_us</code> · <code>view_all_plans</code> · <code>spin_wheel</code> · <code>reminder_on</code> · <code>reminder_off</code></td><td>Các hành động riêng của một số paywall. Chỉ dùng khi màn đó thật sự có, và phải khớp với app.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn"><div class="h">Action chỉ chạy trên máy thật</div>
+    Trong Builder, bấm nút Mua sẽ không mua gì cả — ở đây không có billing. Dùng nút <span class="pill">Preview</span>
+    ở màn Preview: nó ghi lại mọi action bạn bấm vào một nhật ký bên cạnh. <strong>Bấm mà nhật ký trống nghĩa là
+    nút chưa gắn action</strong> — đó chính là loại lỗi màn đó sinh ra để bắt.
+  </div>
+
   <!-- 12 -->
   <h2 id="quy-uoc">12. Quy ước &amp; mẹo vàng <a class="anchor" href="#quy-uoc">#</a></h2>
   <div class="callout tip"><div class="h">Thang khoảng cách 4dp</div>Mọi padding/margin/khoảng hở nên chọn trong dãy: <strong>2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64</strong>. Đừng dùng số lẻ như 11, 13, 17. Cả màn hình nên chỉ dùng 3–5 con số khoảng cách → trông gọn gàng, nhất quán.</div>
@@ -890,12 +920,61 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
 
   <!-- 14 -->
   <h2 id="luu">14. Lưu, xem trước &amp; xuất bản <a class="anchor" href="#luu">#</a></h2>
+  <p>Có <strong>hai nút khác nhau</strong>, và đây là chỗ dễ nhầm nhất của cả tài liệu. Cả hai đều nằm ở thanh trên cùng của NoCode Preview, không phải trong thanh công cụ của Builder.</p>
+
+  <table>
+    <thead><tr><th>Nút</th><th>Ghi vào đâu</th><th>Người dùng app có thấy không?</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Save draft</strong></td>
+        <td><code>&lt;project&gt;/.drafts/&lt;tên file&gt;</code> — một chỗ riêng</td>
+        <td><strong>Không.</strong> File mà app đang đọc không hề bị đụng tới.</td>
+      </tr>
+      <tr>
+        <td><strong>Push to S3</strong></td>
+        <td><code>&lt;project&gt;/&lt;tên file&gt;</code> — đúng file app đang đọc</td>
+        <td><strong>Có, gần như ngay.</strong> Đây là phát hành thật.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip"><div class="h">Nháp KHÔNG còn đè lên bản đang chạy</div>
+    Trước đây Save draft ghi thẳng lên file thật, nên "nháp" chỉ là tên gọi — nội dung chưa duyệt đã ra tới người dùng ngay lúc bấm nút. Giờ nháp nằm ở thư mục <code>.drafts</code> riêng của từng project. Cứ lưu thoải mái giữa chừng.
+  </div>
+
+  <h3>Xem trước trước khi phát hành</h3>
   <ul>
-    <li><strong>Xem trước:</strong> dùng ô kích thước thiết bị và nút sáng/tối ở thanh công cụ để soát trên nhiều ngữ cảnh.</li>
-    <li><strong>Nhập từ Figma:</strong> nút <strong>Figma</strong> giúp đưa thiết kế vào để dựng nhanh. Mẹo: trong Figma, đặt tên layer ảnh/icon bắt đầu bằng <code>xImage</code>, <code>xIcon</code>, <code>xLottie</code>, <code>xGif</code>, <code>xVideo</code> để chúng được hiểu là tài nguyên đơn (một file ảnh), không bị tách nhỏ.</li>
-    <li><strong>Lưu:</strong> bấm <strong>Save</strong>. Vì giao diện nạp từ server, thay đổi sẽ tới người dùng mà không cần cập nhật app.</li>
+    <li><strong>Nhiều kích thước:</strong> đổi ô kích thước thiết bị trên thanh công cụ. Nhớ thử cả <code>375x667</code> — đó là màn thấp nhất, chỗ nút CTA bị đẩy khỏi mép dưới trước tiên.</li>
+    <li><strong>Sáng và tối:</strong> bật nút ☀/🌙, vì màu nền lấy từ bảng màu theo chủ đề.</li>
+    <li><strong>Nhiều ngôn ngữ:</strong> đổi ô ngôn ngữ để soát bản dịch — câu tiếng Đức thường dài gấp rưỡi tiếng Anh và là thứ hay làm vỡ bố cục nhất.</li>
+    <li><strong>Bấm thử:</strong> ở màn Preview có nút <span class="pill">Preview</span> mở cửa sổ dùng thử như máy thật. Mỗi lần bạn bấm vào layout, action sẽ hiện ra trong nhật ký bên cạnh — <strong>bấm nút Mua mà nhật ký trống nghĩa là nút đó chưa gắn action</strong>.</li>
   </ul>
-  <div class="callout danger"><div class="h">Trước khi Save</div>Kiểm tra ô lỗi/cảnh báo trên thanh công cụ. <strong>Lỗi (✕ đỏ) phải bằng 0.</strong> Cảnh báo (⚠ vàng) nên rà soát nhưng không chặn lưu.</div>
+
+  <div class="callout danger"><div class="h">Trước khi Push to S3</div>Kiểm tra ô lỗi/cảnh báo trên thanh công cụ. <strong>Lỗi (✕ đỏ) phải bằng 0.</strong> Cảnh báo (⚠ vàng) nên rà soát nhưng không chặn lưu.</div>
+
+  <h3>Hộp xác nhận khi Push to S3</h3>
+  <ul>
+    <li><strong>Target</strong> — đường dẫn S3 sẽ bị ghi đè. Đọc lại một lượt.</li>
+    <li><strong>Thay đổi (body)</strong> — hai cột so sánh bản cũ và bản mới. Đây là cơ hội cuối để phát hiện mình sửa nhầm file.</li>
+    <li><strong>Commit message</strong> — ghi chú thay đổi, ví dụ <em>"tăng giá yearly, đổi hero"</em>. Nó được lưu vào lịch sử nên hãy viết cho người ba tháng sau đọc.</li>
+    <li><strong>☑ Bump version &amp; giữ bản cũ để rollback</strong> — tăng số phiên bản (v9 → v10) và giữ bản cũ để quay lui.</li>
+    <li><strong>☑ Xoá cache CDN sau khi publish</strong> — xem mục dưới. Layout mới thì ô này tự bỏ qua, vì chưa có gì trong cache để xoá.</li>
+  </ul>
+
+  <h3>Xoá cache CDN — vì sao phải chờ</h3>
+  <p>File mới lên S3 rồi nhưng CDN vẫn đang giữ bản cũ, nên phải bảo nó vứt đi. Việc này mất <strong>khoảng 25 giây</strong> và chạy <strong>ở nền</strong>: hộp Push đóng ngay khi file lên S3 xong, còn kết quả xoá cache hiện ở góc màn hình và tự cập nhật.</p>
+  <ul>
+    <li><span class="pill">Đang xoá cache CDN…</span> — bình thường, cứ làm việc tiếp.</li>
+    <li><span class="pill">Cache CDN đã sạch</span> — xong, báo QC được rồi.</li>
+    <li><span class="pill">Xoá cache CDN hỏng</span> — <strong>đừng báo QC vội.</strong> Dòng thông báo có ghi lý do; app có thể vẫn đang ăn bản cũ.</li>
+  </ul>
+
+  <div class="callout warn"><div class="h">"Đã publish" và "người dùng đã thấy" là hai việc</div>
+    Publish xong mà cache chưa sạch thì app vẫn nhận bản cũ. Hãy đợi dòng <strong>Cache CDN đã sạch</strong> rồi mới báo QC kiểm tra.
+  </div>
+
+  <h3>Lỡ tay thì sao</h3>
+  <p>Mỗi lần Push có bật <em>Bump version</em> đều giữ lại bản trước đó, nên sai thì quay lui được — không phải dựng lại từ đầu. Nhưng người dùng có thể đã kịp thấy bản sai trong mấy phút đó, nên thà soát diff kỹ một phút còn hơn.</p>
 
   <!-- glossary -->
   <h2 id="tu-dien">Từ điển thuật ngữ nhanh <a class="anchor" href="#tu-dien">#</a></h2>
