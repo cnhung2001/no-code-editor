@@ -12,6 +12,7 @@ const Builder = lazy(() => import('./components/Builder').then((m) => ({ default
 const AdminScreen = lazy(() => import('./admin/AdminScreen').then((m) => ({ default: m.AdminScreen })));
 import { HtmlModal } from './components/modals/HtmlModal';
 import { PushModal } from './components/modals/PushModal';
+import { CachePurgeToast } from './components/CachePurgeToast';
 import { s3, IS_MOCK } from './s3';
 import { AuthProvider, useAuth, useProjectPerms } from './auth/AuthContext';
 import { LoginScreen } from './auth/LoginScreen';
@@ -72,6 +73,9 @@ function Shell() {
     const [imageFile, setImageFile] = useState<S3Item | null>(null);
     const [htmlFile, setHtmlFile] = useState<S3Item | null>(null);
     const [pushTarget, setPushTarget] = useState<{ key: string; body: string; meta?: LayoutMeta } | null>(null);
+    // Việc xoá cache CDN sống LÂU HƠN modal đã khởi động nó: ~25s, và người ta
+    // đóng modal ngay khi file lên S3 xong. Nên nó phải nằm ở đây.
+    const [purgeId, setPurgeId] = useState<string | null>(null);
 
     useEffect(() => {
         s3.listProjects().then(setProjects).catch(() => setProjects([]));
@@ -344,12 +348,17 @@ function Shell() {
                 <PushModal
                     target={pushTarget}
                     onClose={() => setPushTarget(null)}
-                    onDone={() => {
+                    onDone={(purgeId) => {
                         setPushTarget(null);
                         setIsNew(false);
                         setView('browser');
+                        setPurgeId(purgeId);
                     }}
                 />
+            )}
+
+            {purgeId && (
+                <CachePurgeToast purgeId={purgeId} onDismiss={() => setPurgeId(null)} />
             )}
         </div>
     );

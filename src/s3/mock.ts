@@ -121,6 +121,10 @@ export const mockAdapter: S3Adapter = {
         await delay();
         const isNew = !(key in LAYOUTS);
         try { LAYOUTS[key] = JSON.parse(body); } catch { /* ignore */ }
-        return { version: 'v1', cachePurged: isNew ? null : true };
+        return { version: 'v1', purgeId: isNew ? null : 'mock-purge' };
+    },
+    async purgeStatus() {
+        await delay();
+        return { state: 'done' as const };
     }
 };

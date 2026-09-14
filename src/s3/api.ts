@@ -9,7 +9,8 @@ import type {
     LayoutStatus,
     LayoutMeta,
     PublishOptions,
-    PublishResult
+    PublishResult,
+    PurgeStatus
 } from '../types';
 
 const BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -85,5 +86,9 @@ export const apiAdapter: S3Adapter = {
                 body: JSON.stringify({ key, body, ...opts })
             })
         );
+    },
+
+    async purgeStatus(id: string) {
+        return j<PurgeStatus>(await fetch(`${BASE}/publish/purge/${encodeURIComponent(id)}`));
     }
 };

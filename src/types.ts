@@ -47,17 +47,22 @@ export interface PublishOptions {
 export interface PublishResult {
     version: string;
     /**
-     * Kết quả purge cache CDN: true = đã xoá, false = gọi endpoint purge hỏng
-     * (file VẪN publish xong), null = không gọi — layout mới, hoặc bỏ tick
-     * invalidate, hoặc server không cấu hình CDN_PURGE_URL.
+     * Id để hỏi kết quả purge cache CDN, hoặc null khi không purge — layout
+     * mới, bỏ tick invalidate, hoặc server không cấu hình CDN_PURGE_URL.
+     *
+     * Purge chạy nền vì nó mất ~25s (endpoint hạ tầng chờ CloudFront tới
+     * Completed), trong khi file đã nằm trên S3 ngay khi publish trả về.
      */
-    cachePurged: boolean | null;
-    /**
-     * Vì sao purge hỏng, khi `cachePurged === false`. Có để người bấm Publish
-     * biết phải làm gì tiếp: hết giờ chờ thì kiểm tra lại rồi mới xoá tay, còn
-     * 403/504 thì phải gọi hạ tầng.
-     */
-    cachePurgeError?: string;
+    purgeId: string | null;
+}
+
+/** Trạng thái purge. `unknown` = server restart giữa chừng, phải tự đi kiểm. */
+export type PurgeState = 'pending' | 'done' | 'failed' | 'unknown';
+
+export interface PurgeStatus {
+    state: PurgeState;
+    /** Vì sao hỏng, khi `state === 'failed'`. */
+    reason?: string;
 }
 
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)
@@ -77,4 +82,6 @@ export interface S3Adapter {
     deleteObject(key: string): Promise<void>;
     uploadAsset(project: string, file: File): Promise<string>;
     publish(key: string, body: string, opts: PublishOptions): Promise<PublishResult>;
+    /** Hỏi kết quả purge của một lần publish (xem `PublishResult.purgeId`). */
+    purgeStatus(id: string): Promise<PurgeStatus>;
 }

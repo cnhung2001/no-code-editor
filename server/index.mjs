@@ -35,7 +35,7 @@ import {
     session
 } from './authz.mjs';
 import { DB_ENABLED, ensureSchema } from './db.mjs';
-import { auditMiddleware, search as searchAudit } from './audit.mjs';
+import { auditMiddleware, record, search as searchAudit } from './audit.mjs';
 import { accessiblePrefixes } from './project-scope.mjs';
 import { DRAFT_SEGMENT, draftKey, draftPrefix } from './draft-key.mjs';
 import { isGeminiConfigured, translateGemini } from './mt-gemini.mjs';
@@ -116,6 +116,57 @@ async function purgeCdnCache() {
         }
         return { ok: false, reason: `không gọi được endpoint purge: ${String(e.message || e)}` };
     }
+}
+
+/**
+ * Bắt đầu purge và trả về id để hỏi kết quả sau. KHÔNG chờ.
+ *
+ * Việc người bấm Publish cần biết đã xong là "file đã lên S3 chưa" — cái đó
+ * xong sau bước 3, dưới một giây. Purge mất ~25s vì endpoint hạ tầng chờ
+ * CloudFront tới Completed, và nó chạy tiếp kể cả khi ta bỏ request. Bắt cả
+ * modal đứng im 25s để xem kết quả một việc như thế là trả giá sai chỗ.
+ *
+ * Trạng thái giữ trong RAM tiến trình này. Restart là mất — client hỏi không
+ * thấy id thì phải coi là KHÔNG RÕ và tự đi kiểm, không được coi là sạch.
+ */
+const purgeJobs = new Map();
+const PURGE_JOB_TTL_MS = 10 * 60 * 1000;
+
+function startCdnPurge(key, req) {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    purgeJobs.set(id, { state: 'pending', key, at: Date.now() });
+
+    purgeCdnCache().then((result) => {
+        purgeJobs.set(id, {
+            state: result.ok ? 'done' : 'failed',
+            reason: result.reason,
+            key,
+            at: Date.now()
+        });
+        if (result.reason) console.error('[cdn-purge]', key, result.reason);
+        // Audit riêng, vì kết quả chỉ có SAU khi response của publish đã đi.
+        // Không ghi thì đọc lại audit sẽ thấy publish thành công mà không biết
+        // cache có sạch hay không — đúng thứ cần truy khi QC báo ăn bản cũ.
+        record({
+            userId: req.authzUser?.id,
+            userEmail: req.authzUser?.email,
+            action: 'publish',
+            outcome: result.ok ? 'allow' : 'error',
+            bucketPrefix: req.bucketPrefix,
+            objectKey: key,
+            method: 'POST',
+            path: '/api/publish#cdn-purge',
+            detail: { cachePurged: result.ok, cachePurgeError: result.reason }
+        });
+    });
+
+    // Dọn job đã xong và quá hạn. Pending thì để yên: client còn đang hỏi nó.
+    for (const [jobId, job] of purgeJobs) {
+        if (job.state !== 'pending' && Date.now() - job.at > PURGE_JOB_TTL_MS) {
+            purgeJobs.delete(jobId);
+        }
+    }
+    return id;
 }
 
 // ── Draft: bản nháp nằm ở prefix RIÊNG, không đè key mà app đang đọc ───────
@@ -687,30 +738,32 @@ app.post('/api/publish', async (req, res) => {
             }));
         }
 
-        // 5. Purge cache CDN. CHỈ khi ghi đè: key mới thì chưa có gì trong cache để
-        //    xoá, mà endpoint này purge diện rộng — gọi thừa là bắt mọi layout khác
-        //    của mọi project phải nạp lại từ origin.
-        let cachePurged = null;
-        let cachePurgeError;
+        // 5. Purge cache CDN, chạy NỀN. CHỈ khi ghi đè: key mới thì chưa có gì
+        //    trong cache để xoá, mà endpoint này purge diện rộng — gọi thừa là
+        //    bắt mọi layout khác của mọi project phải nạp lại từ origin.
+        let purgeId = null;
         if (invalidateCdn && head && CDN_PURGE_URL) {
-            const purge = await purgeCdnCache();
-            cachePurged = purge.ok;
-            cachePurgeError = purge.reason;
-            if (purge.reason) console.error('[cdn-purge]', key, purge.reason);
+            purgeId = startCdnPurge(key, req);
         }
-        res.locals.auditDetail.cachePurged = cachePurged;
-        // Lý do vào cả audit: sau này đọc lại mới biết bản nào publish ra mà
-        // cache chưa chắc sạch, và vì sao.
-        if (cachePurgeError) res.locals.auditDetail.cachePurgeError = cachePurgeError;
+        res.locals.auditDetail.cachePurgeStarted = Boolean(purgeId);
 
         // 6. Nội dung nháp giờ đã là bản live → bỏ nháp, không thì file nào cũng
         //    đeo nhãn "có bản nháp" vĩnh viễn dù nháp y hệt bản đang chạy.
         await dropDraft(key);
 
-        res.json({ ok: true, version: nextVersion, cachePurged, cachePurgeError });
+        res.json({ ok: true, version: nextVersion, purgeId });
     } catch (e) {
         res.status(500).send(String(e.message || e));
     }
+});
+
+// ── Kết quả purge của một lần publish ──────────────────────────────────────
+// Không thấy id ≠ đã xong: tiến trình có thể vừa restart. Trả 'unknown' để
+// client nói đúng là "không rõ" thay vì im lặng coi như sạch.
+app.get('/api/publish/purge/:id', (req, res) => {
+    const job = purgeJobs.get(req.params.id);
+    if (!job) return res.json({ state: 'unknown' });
+    res.json({ state: job.state, reason: job.reason });
 });
 
 // ── Machine translation: dịch 1 chuỗi sang nhiều locale ────────────────────
