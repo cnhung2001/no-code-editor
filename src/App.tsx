@@ -70,8 +70,10 @@ function Shell() {
     // không phải vị trí trong bucket nên buildUrl chặn nó trước, còn `path` vẫn
     // giữ chỗ cũ để đóng Admin là quay về đúng chỗ đang đứng.
     const [showAdmin, setShowAdmin] = useState(false);
-    // Cùng lý do với Admin: hướng dẫn không phải một vị trí trong bucket nên nó
-    // đứng ngoài phần đồng bộ URL↔state. `null` = đang không mở.
+    // KHÁC Admin: hướng dẫn CÓ mặt trong URL (`/help`, `/help/quy-trinh`).
+    // Nó là chỗ người ta ngồi lại đọc, nên F5 phải giữ nguyên trang, Back phải
+    // thoát ra được, và gửi link cho đồng nghiệp phải mở đúng mục.
+    // `undefined` = đang không mở; `null` = mở từ đầu tài liệu.
     const [helpAnchor, setHelpAnchor] = useState<GuideAnchor | null | undefined>(undefined);
     const openHelp = (anchor?: GuideAnchor) => setHelpAnchor(anchor ?? null);
     const [view, setView] = useState<View>('browser');
@@ -106,7 +108,7 @@ function Shell() {
 
         /** Khôi phục state từ pathname. Segment cuối là file hay thư mục thì phải hỏi S3. */
         async function applyRoute(pathname: string) {
-            const { segments, isNew: wantNew, isAdmin: wantAdmin } = parseUrl(pathname);
+            const { segments, isNew: wantNew, isAdmin: wantAdmin, help } = parseUrl(pathname);
             console.log('[route] applyRoute', pathname, segments);
             restoringRef.current = true;
 
@@ -119,8 +121,17 @@ function Shell() {
             setShowAdmin(wantAdmin);
             if (wantAdmin) {
                 setIsNew(false);
+                setHelpAnchor(undefined);
                 return;
             }
+
+            // Hướng dẫn cũng vậy: không đụng `path`/`view`, nên Back trả về
+            // đúng file đang mở dở.
+            if (help !== null) {
+                setHelpAnchor((help || null) as GuideAnchor | null);
+                return;
+            }
+            setHelpAnchor(undefined);
 
             // Tạo layout mới cần có project — "/new" trần thì bỏ qua cờ.
             if (wantNew && segments.length) {
@@ -200,7 +211,16 @@ function Shell() {
                   : htmlFile
                     ? htmlFile.name
                     : null;
-        const url = buildUrl({ path, fileName, isNew: view === 'builder' && isNew, isAdmin: showAdmin });
+        const url = buildUrl({
+            path,
+            fileName,
+            isNew: view === 'builder' && isNew,
+            isAdmin: showAdmin,
+            // undefined = không mở hướng dẫn → null cho buildUrl. Mở mà không có
+            // neo là `null` ở state nhưng `''` ở URL — hai cách nói "từ đầu tài
+            // liệu" khác nhau, lẫn là ra `/` thay vì `/help`.
+            help: helpAnchor === undefined ? null : (helpAnchor ?? '')
+        });
 
         console.log('[route] sync', {
             url,
@@ -227,7 +247,7 @@ function Shell() {
         } else {
             window.history.pushState(null, '', url);
         }
-    }, [path, view, activeFile, imageFile, htmlFile, isNew, showAdmin]);
+    }, [path, view, activeFile, imageFile, htmlFile, isNew, showAdmin, helpAnchor]);
 
     // Gõ thẳng /admin mà không phải admin hệ thống: đá về gốc. Đây CHỈ là UX —
     // backend gate độc lập bằng requireSystemAdmin, ẩn màn không phải phân quyền.

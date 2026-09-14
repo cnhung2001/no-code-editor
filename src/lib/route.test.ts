@@ -14,57 +14,61 @@ function eq(actual: unknown, expected: unknown, label: string) {
 }
 
 // ── parseUrl ──────────────────────────────────────────────────────────────
-eq(parseUrl('/'), { segments: [], isNew: false, isAdmin: false }, 'parseUrl gốc');
-eq(parseUrl(''), { segments: [], isNew: false, isAdmin: false }, 'parseUrl chuỗi rỗng');
-eq(parseUrl('/ai-video'), { segments: ['ai-video'], isNew: false, isAdmin: false }, 'parseUrl project');
-eq(parseUrl('/ai-video/images'), { segments: ['ai-video', 'images'], isNew: false, isAdmin: false }, 'parseUrl thư mục lồng');
+eq(parseUrl('/'), { segments: [], isNew: false, isAdmin: false, help: null }, 'parseUrl gốc');
+eq(parseUrl(''), { segments: [], isNew: false, isAdmin: false, help: null }, 'parseUrl chuỗi rỗng');
+eq(parseUrl('/ai-video'), { segments: ['ai-video'], isNew: false, isAdmin: false, help: null }, 'parseUrl project');
+eq(parseUrl('/ai-video/images'), { segments: ['ai-video', 'images'], isNew: false, isAdmin: false, help: null }, 'parseUrl thư mục lồng');
 eq(
     parseUrl('/ai-video/welcome.json'),
-    { segments: ['ai-video', 'welcome.json'], isNew: false, isAdmin: false },
+    { segments: ['ai-video', 'welcome.json'], isNew: false, isAdmin: false, help: null },
+
     'parseUrl file layout'
 );
 eq(
     parseUrl('/printer/Assets/anim/on-2/master.m3u8'),
-    { segments: ['printer', 'Assets', 'anim', 'on-2', 'master.m3u8'], isNew: false, isAdmin: false },
+    { segments: ['printer', 'Assets', 'anim', 'on-2', 'master.m3u8'], isNew: false, isAdmin: false, help: null },
+
     'parseUrl lồng sâu'
 );
 
 // Dấu / thừa phải được chuẩn hoá, nếu không state sẽ có segment rỗng.
-eq(parseUrl('/ai-video/'), { segments: ['ai-video'], isNew: false, isAdmin: false }, 'parseUrl bỏ / cuối');
-eq(parseUrl('//ai-video//images//'), { segments: ['ai-video', 'images'], isNew: false, isAdmin: false }, 'parseUrl gộp / lặp');
+eq(parseUrl('/ai-video/'), { segments: ['ai-video'], isNew: false, isAdmin: false, help: null }, 'parseUrl bỏ / cuối');
+eq(parseUrl('//ai-video//images//'), { segments: ['ai-video', 'images'], isNew: false, isAdmin: false, help: null }, 'parseUrl gộp / lặp');
 
 // "new" là route dựng layout mới, không phải tên thư mục.
-eq(parseUrl('/ai-video/new'), { segments: ['ai-video'], isNew: true, isAdmin: false }, 'parseUrl new trong project');
-eq(parseUrl('/ai-video/images/new'), { segments: ['ai-video', 'images'], isNew: true, isAdmin: false }, 'parseUrl new lồng');
+eq(parseUrl('/ai-video/new'), { segments: ['ai-video'], isNew: true, isAdmin: false, help: null }, 'parseUrl new trong project');
+eq(parseUrl('/ai-video/images/new'), { segments: ['ai-video', 'images'], isNew: true, isAdmin: false, help: null }, 'parseUrl new lồng');
 // /new ở gốc: parse trung thực, App tự bỏ qua vì tạo layout cần có project.
-eq(parseUrl('/new'), { segments: [], isNew: true, isAdmin: false }, 'parseUrl new ở gốc');
+eq(parseUrl('/new'), { segments: [], isNew: true, isAdmin: false, help: null }, 'parseUrl new ở gốc');
+
 
 // 137 key trong bucket chứa '@' (flag_en@3x.png) — phải decode lại đúng.
 eq(
     parseUrl('/ai-learn/onboarding_1/flag_en%403x.png'),
-    { segments: ['ai-learn', 'onboarding_1', 'flag_en@3x.png'], isNew: false, isAdmin: false },
+    { segments: ['ai-learn', 'onboarding_1', 'flag_en@3x.png'], isNew: false, isAdmin: false, help: null },
+
     'parseUrl decode %40'
 );
 
 // ── /admin ────────────────────────────────────────────────────────────────
 // Chỉ nhận ở GỐC. Lồng trong project vẫn là thư mục thật tên "admin".
-eq(parseUrl('/admin'), { segments: [], isNew: false, isAdmin: true }, 'parseUrl admin');
-eq(parseUrl('/admin/'), { segments: [], isNew: false, isAdmin: true }, 'parseUrl admin có / cuối');
-eq(parseUrl('//admin//'), { segments: [], isNew: false, isAdmin: true }, 'parseUrl admin / lặp');
+eq(parseUrl('/admin'), { segments: [], isNew: false, isAdmin: true, help: null }, 'parseUrl admin');
+eq(parseUrl('/admin/'), { segments: [], isNew: false, isAdmin: true, help: null }, 'parseUrl admin có / cuối');
+eq(parseUrl('//admin//'), { segments: [], isNew: false, isAdmin: true, help: null }, 'parseUrl admin / lặp');
 eq(
     parseUrl('/ai-video/admin'),
-    { segments: ['ai-video', 'admin'], isNew: false, isAdmin: false },
+    { segments: ['ai-video', 'admin'], isNew: false, isAdmin: false, help: null },
     'parseUrl admin lồng vẫn là thư mục'
 );
 eq(
     parseUrl('/admin/settings'),
-    { segments: ['admin', 'settings'], isNew: false, isAdmin: false },
+    { segments: ['admin', 'settings'], isNew: false, isAdmin: false, help: null },
     'parseUrl admin có segment sau thì không phải route admin'
 );
 // "new" đứng sau admin không được biến nó thành route tạo layout.
 eq(
     parseUrl('/admin/new'),
-    { segments: ['admin'], isNew: true, isAdmin: false },
+    { segments: ['admin'], isNew: true, isAdmin: false, help: null },
     'parseUrl admin/new là thư mục admin + new'
 );
 
@@ -77,7 +81,8 @@ eq(
     '/ai-video/welcome.json',
     'buildUrl file'
 );
-eq(buildUrl({ path: ['ai-video'], isNew: true, isAdmin: false }), '/ai-video/new', 'buildUrl new');
+eq(buildUrl({ path: ['ai-video'], isNew: true, isAdmin: false, help: null }), '/ai-video/new', 'buildUrl new');
+
 eq(
     buildUrl({ path: ['ai-learn', 'onboarding_1'], fileName: 'flag_en@3x.png' }),
     '/ai-learn/onboarding_1/flag_en%403x.png',
@@ -98,7 +103,7 @@ eq(buildUrl({ path: ['ai-video'], isNew: true, isAdmin: true }), '/admin', 'buil
 eq(buildUrl({ path: ['ai-video'], isAdmin: false }), '/ai-video', 'buildUrl isAdmin false không đổi gì');
 
 // Round-trip riêng: /admin parse lại phải ra đúng cờ admin.
-eq(parseUrl(buildUrl({ path: ['ai-video'], isAdmin: true })), { segments: [], isNew: false, isAdmin: true }, 'round-trip admin');
+eq(parseUrl(buildUrl({ path: ['ai-video'], isAdmin: true })), { segments: [], isNew: false, isAdmin: true, help: null }, 'round-trip admin');
 
 // ── round-trip ────────────────────────────────────────────────────────────
 // Mọi URL dựng ra phải parse lại được về đúng segment ban đầu.
@@ -108,8 +113,9 @@ const cases: { path: string[]; fileName?: string | null; isNew?: boolean }[] = [
     { path: ['ai-video', 'images'] },
     { path: ['ai-video'], fileName: 'welcome.json' },
     { path: ['ai-learn', 'onboarding_1'], fileName: 'flag_en@3x.png' },
-    { path: ['ai-video'], isNew: true, isAdmin: false },
-    { path: ['ai-video', 'images'], isNew: true, isAdmin: false }
+    { path: ['ai-video'], isNew: true, isAdmin: false, help: null },
+    { path: ['ai-video', 'images'], isNew: true, isAdmin: false, help: null }
+
 ];
 for (const c of cases) {
     const url = buildUrl(c);
@@ -117,9 +123,41 @@ for (const c of cases) {
     const expectSegments = c.isNew ? c.path : c.fileName ? [...c.path, c.fileName] : c.path;
     eq(
         back,
-        { segments: expectSegments, isNew: Boolean(c.isNew), isAdmin: false },
+        { segments: expectSegments, isNew: Boolean(c.isNew), isAdmin: false, help: null },
+
         `round-trip ${url}`
     );
+}
+
+// ── route hướng dẫn ───────────────────────────────────────────────────────
+// Nó chiếm segment ĐẦU và nuốt phần còn lại, khác hẳn "new" (segment CUỐI).
+eq(parseUrl('/help'), { segments: [], isNew: false, isAdmin: false, help: '' }, '/help → mở từ đầu');
+eq(parseUrl('/help/'), { segments: [], isNew: false, isAdmin: false, help: '' }, '/help/ → bỏ "/" thừa');
+eq(parseUrl('/help/quy-trinh'), { segments: [], isNew: false, isAdmin: false, help: 'quy-trinh' }, '/help/<mục>');
+eq(
+    parseUrl('/help/quy-trinh/lung-tung'),
+    { segments: [], isNew: false, isAdmin: false, help: 'quy-trinh' },
+    'segment thừa sau mục bị bỏ, không thành thư mục'
+);
+// "help" chỉ là route khi đứng ĐẦU — một project tên "help" ở giữa không bị nuốt.
+eq(parseUrl('/ai-video/help'), { segments: ['ai-video', 'help'], isNew: false, isAdmin: false, help: null }, '"help" ở giữa vẫn là thư mục');
+eq(parseUrl('/ai-video/new'), { segments: ['ai-video'], isNew: true, isAdmin: false, help: null }, 'route "new" không đổi');
+eq(parseUrl('/'), { segments: [], isNew: false, isAdmin: false, help: null }, 'gốc bucket vẫn help=null');
+
+eq(buildUrl({ path: [], help: '' }), '/help', 'buildUrl: help rỗng → /help');
+eq(buildUrl({ path: [], help: 'luu' }), '/help/luu', 'buildUrl: help có neo');
+eq(
+    buildUrl({ path: ['ai-video'], fileName: 'a.json', help: 'luu' }),
+    '/help/luu',
+    'help thắng mọi thứ còn lại'
+);
+eq(buildUrl({ path: ['ai-video'], fileName: 'a.json', help: null }), '/ai-video/a.json', 'help=null → đường cũ');
+eq(buildUrl({ path: ['ai-video'], fileName: 'a.json' }), '/ai-video/a.json', 'không truyền help → đường cũ');
+
+// round-trip
+for (const url of ['/help', '/help/quy-trinh', '/help/luu']) {
+    const p = parseUrl(url);
+    eq(buildUrl({ path: [], help: p.help }), url, `round-trip ${url}`);
 }
 
 // ── kết quả ───────────────────────────────────────────────────────────────
