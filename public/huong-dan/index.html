@@ -278,7 +278,7 @@
   <p>Màn hình Builder chia làm <strong>3 khu vực chính</strong>, giống mọi trình thiết kế trực quan:</p>
 
   <div class="diagram">┌──────────────────────────────────────────────────────────────────────┐
-│  Thanh công cụ:  [375x812 ▼] [🌐 ngôn ngữ] [☀/🌙] [↶ ↷]  [0 ✕  0 ⚠]      │
+│  Thanh công cụ:  [375x812 ▼] [⚙ zoom · LTR/RTL] [☀/🌙] [↶ ↷]  [0 ✕ 0 ⚠]  │
 ├───────────────┬───────────────────────────────┬──────────────────────┤
 │  ① CÂY        │      ② KHUNG XEM TRƯỚC         │   ③ BẢNG THUỘC TÍNH    │
 │  COMPONENTS   │         (canvas)              │                       │
@@ -325,7 +325,7 @@
     <li><span class="pill">☀ / 🌙</span> Bật/tắt <strong>chế độ sáng–tối</strong> để xem màn hình ở cả hai nền.</li>
     <li><span class="pill">↶ ↷</span> <strong>Hoàn tác / Làm lại</strong> (<span class="kbd">Ctrl/⌘ + Z</span>). Cứ mạnh dạn thử, sai thì hoàn tác.</li>
     <li><span class="pill">0 ✕ &nbsp; 0 ⚠</span> Số <strong>lỗi</strong> (đỏ) và <strong>cảnh báo</strong> (vàng). Phải đưa lỗi về 0 trước khi lưu.</li>
-    <li><span class="pill">🌐</span> Chọn <strong>ngôn ngữ xem trước</strong>. Đổi nhanh để soát bản dịch mà không phải sửa biến.</li>
+    <li><span class="pill">⚙</span> Bấm vào ô kích thước để mở thêm: <strong>zoom</strong> (và nút về 100%), <strong>vừa cửa sổ</strong>, <strong>safe area</strong>, và <strong>hướng viết LTR/RTL</strong>. Nút RTL là cách duy nhất soát bố cục cho tiếng Ả Rập ngay tại đây — xem mục 5.3.</li>
     <li><strong>Không có nút Save ở thanh này.</strong> Việc lưu nằm ở thanh trên cùng của NoCode Preview — <span class="pill">Save draft</span> và <span class="pill">Push to S3</span>. Xem phần 14.</li>
   </ul>
 
@@ -758,7 +758,7 @@ default_state_id: selected</code></pre>
 
   <figure class="shot tall">
     <img src="images/builder-05-variables.jpg" alt="Tab Variables">
-    <figcaption>Ảnh thật: tab Variables — các biến chuỗi (<code>url_base</code>, <code>url_icon_*</code> trỏ tới link ảnh) và các từ điển <code>i18n_*</code> chứa bản dịch theo ngôn ngữ (ví dụ khoá <code>"ar"</code> cho tiếng Ả Rập).</figcaption>
+    <figcaption>Ảnh thật: tab Variables — các biến chuỗi (<code>url_base</code>, <code>url_icon_*</code> trỏ tới link ảnh) và các từ điển <code>locale_i18n_*</code> chứa bản dịch theo ngôn ngữ (ví dụ khoá <code>"ar"</code> cho tiếng Ả Rập).</figcaption>
   </figure>
 
   <h3>Các loại biến hay gặp</h3>
@@ -769,12 +769,15 @@ default_state_id: selected</code></pre>
 
   <h3>Đa ngôn ngữ: mỗi câu chữ là một dict</h3>
   <p>Thay vì gõ chữ thẳng vào khối Text, hãy buộc nó vào một từ điển dịch. Như vậy sau này thêm tiếng mới chỉ cần thêm dòng trong biến, không phải sửa từng khối.</p>
-  <pre><code>// Khai báo biến i18n_title:
+  <pre><code>// Khai báo biến locale_i18n_title:
 { "en": "Unlock Premium", "vi": "Mở khoá Premium" }
 
 // Trong khối Text:
-@{getOptStringFromDict('Unlock Premium', i18n_title, language_code)}</code></pre>
-  <div class="callout danger"><div class="h">Không gõ chữ cứng</div>Kể cả nhãn ngắn như "Restore", "Continue", "BEST OFFER" cũng nên buộc vào một dict <code>i18n_…</code>. Đây là việc nhỏ nhưng giúp dịch và A/B test về sau cực kỳ dễ.</div>
+@{getOptStringFromDict('Unlock Premium', locale_i18n_title, language_code)}</code></pre>
+  <div class="callout danger"><div class="h">Không gõ chữ cứng</div>Kể cả nhãn ngắn như "Restore", "Continue", "BEST OFFER" cũng nên buộc vào một dict <code>locale_i18n_…</code>. Đây là việc nhỏ nhưng giúp dịch và A/B test về sau cực kỳ dễ.</div>
+  <div class="callout note"><div class="h">Đặt tên: dùng <code>locale_i18n_…</code></div>
+    Layout cũ trong bucket có cả <code>i18n_…</code> và <code>locale_…</code>, nhưng <code>locale_i18n_…</code> là quy ước đang chiếm đa số (1864 trên 2811 biến dict). Gặp tên cũ thì cứ để yên — đổi tên biến là phải sửa mọi chỗ gọi nó. Chỉ cần biến MỚI đặt theo quy ước này.
+  </div>
 
   <h3>Bảng màu — <code>local_palette</code></h3>
   <p>Theo quy ước nhóm, luôn khai báo biến <code>local_palette</code> chứa các màu nền sáng/tối, để các màn dùng chung và dễ đổi theme:</p>
@@ -887,7 +890,7 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
   <ul>
     <li><strong>Luôn đặt</strong> <code>width</code> và <code>height</code> cho Text và Image (mặc định <code>wrap_content</code>).</li>
     <li><strong>Luôn đặt</strong> <code>font_size_unit: dp</code> cho chữ.</li>
-    <li><strong>Không gõ chữ cứng</strong> — buộc mọi chữ vào dict <code>i18n_…</code>.</li>
+    <li><strong>Không gõ chữ cứng</strong> — buộc mọi chữ vào dict <code>locale_i18n_…</code>.</li>
     <li><strong>Không gõ giá cứng</strong> — gọi từ Products qua <code>@{tên_gói}</code>.</li>
     <li><strong>Không dùng link ảnh Figma</strong> (hết hạn) — dùng link cố định.</li>
     <li><strong>Dùng <code>overlap</code></strong> khi có nhãn đè lên thẻ (BEST OFFER), nếu không nhãn sẽ rớt ra ngoài.</li>
@@ -910,7 +913,7 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
   <h3>Bảng kiểm trước khi lưu</h3>
   <ul>
     <li>☐ Mọi Text/Image đã có <code>width</code> &amp; <code>height</code>?</li>
-    <li>☐ Chữ dùng <code>font_size_unit: dp</code>, buộc vào <code>i18n_…</code>?</li>
+    <li>☐ Chữ dùng <code>font_size_unit: dp</code>, buộc vào <code>locale_i18n_…</code>?</li>
     <li>☐ Giá lấy từ Products, nút mua trỏ tới <code>@{selected_plan}</code>?</li>
     <li>☐ Có ≥2 gói thì mỗi thẻ đủ cả <code>selected</code> &amp; <code>unselected</code>?</li>
     <li>☐ Nhãn đè (BEST OFFER) nằm trong Container <code>overlap</code>?</li>
@@ -946,7 +949,8 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
   <ul>
     <li><strong>Nhiều kích thước:</strong> đổi ô kích thước thiết bị trên thanh công cụ. Nhớ thử cả <code>375x667</code> — đó là màn thấp nhất, chỗ nút CTA bị đẩy khỏi mép dưới trước tiên.</li>
     <li><strong>Sáng và tối:</strong> bật nút ☀/🌙, vì màu nền lấy từ bảng màu theo chủ đề.</li>
-    <li><strong>Nhiều ngôn ngữ:</strong> đổi ô ngôn ngữ để soát bản dịch — câu tiếng Đức thường dài gấp rưỡi tiếng Anh và là thứ hay làm vỡ bố cục nhất.</li>
+    <li><strong>Ngôn ngữ:</strong> khung xem trước <strong>luôn dựng theo tiếng Anh</strong> — công cụ chưa có chỗ đổi ngôn ngữ xem trước. Mà câu tiếng Đức thường dài gấp rưỡi tiếng Anh và là thứ hay làm vỡ bố cục nhất, nên hãy chừa chỗ cho chữ dài: đừng đặt <code>width</code> cố định cho Text, và soát lại bản dịch trên máy thật.</li>
+    <li><strong>Hướng viết:</strong> nếu có tiếng Ả Rập, bật <strong>RTL</strong> trong ô kích thước để xem bố cục lật chiều.</li>
     <li><strong>Bấm thử:</strong> ở màn Preview có nút <span class="pill">Preview</span> mở cửa sổ dùng thử như máy thật. Mỗi lần bạn bấm vào layout, action sẽ hiện ra trong nhật ký bên cạnh — <strong>bấm nút Mua mà nhật ký trống nghĩa là nút đó chưa gắn action</strong>.</li>
   </ul>
 
@@ -967,6 +971,7 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
     <li><span class="pill">Đang xoá cache CDN…</span> — bình thường, cứ làm việc tiếp.</li>
     <li><span class="pill">Cache CDN đã sạch</span> — xong, báo QC được rồi.</li>
     <li><span class="pill">Xoá cache CDN hỏng</span> — <strong>đừng báo QC vội.</strong> Dòng thông báo có ghi lý do; app có thể vẫn đang ăn bản cũ.</li>
+    <li><span class="pill">Không rõ cache CDN đã sạch chưa</span> — máy chủ khởi động lại giữa chừng nên mất dấu. Cũng <strong>đừng báo QC vội</strong>: tự kiểm rồi hãy kết luận.</li>
   </ul>
 
   <div class="callout warn"><div class="h">"Đã publish" và "người dùng đã thấy" là hai việc</div>
