@@ -61,8 +61,9 @@ function Shell() {
     // system này không có `update` ở đó. Backend gate độc lập, ẩn nút không
     // phải là phân quyền.
     const { isSystemAdmin } = useAuth();
-    // Admin nằm ngoài routing theo URL: nó không phải một vị trí trong bucket,
-    // và nhét vào đó sẽ làm rối phần đồng bộ URL↔state bên dưới.
+    // Admin có URL riêng `/admin` — deep-link và F5 giữ nguyên màn hình. Nó
+    // không phải vị trí trong bucket nên buildUrl chặn nó trước, còn `path` vẫn
+    // giữ chỗ cũ để đóng Admin là quay về đúng chỗ đang đứng.
     const [showAdmin, setShowAdmin] = useState(false);
     const [view, setView] = useState<View>('browser');
     const [activeFile, setActiveFile] = useState<S3Item | null>(null);
@@ -93,13 +94,21 @@ function Shell() {
 
         /** Khôi phục state từ pathname. Segment cuối là file hay thư mục thì phải hỏi S3. */
         async function applyRoute(pathname: string) {
-            const { segments, isNew: wantNew } = parseUrl(pathname);
+            const { segments, isNew: wantNew, isAdmin: wantAdmin } = parseUrl(pathname);
             console.log('[route] applyRoute', pathname, segments);
             restoringRef.current = true;
 
             // Đóng mọi modal trước: URL mới quyết định cái nào được mở lại.
             setImageFile(null);
             setHtmlFile(null);
+
+            // Admin che toàn màn hình nên return sớm, KHÔNG đụng `path`: giữ
+            // nguyên chỗ đang đứng để đóng Admin là quay về đó.
+            setShowAdmin(wantAdmin);
+            if (wantAdmin) {
+                setIsNew(false);
+                return;
+            }
 
             // Tạo layout mới cần có project — "/new" trần thì bỏ qua cờ.
             if (wantNew && segments.length) {
@@ -179,7 +188,7 @@ function Shell() {
                   : htmlFile
                     ? htmlFile.name
                     : null;
-        const url = buildUrl({ path, fileName, isNew: view === 'builder' && isNew });
+        const url = buildUrl({ path, fileName, isNew: view === 'builder' && isNew, isAdmin: showAdmin });
 
         console.log('[route] sync', {
             url,
@@ -187,7 +196,8 @@ function Shell() {
             restoring: restoringRef.current,
             first: firstSyncRef.current,
             path: path.join('/'),
-            view
+            view,
+            showAdmin
         });
 
         if (restoringRef.current) {
@@ -205,7 +215,21 @@ function Shell() {
         } else {
             window.history.pushState(null, '', url);
         }
-    }, [path, view, activeFile, imageFile, htmlFile, isNew]);
+    }, [path, view, activeFile, imageFile, htmlFile, isNew, showAdmin]);
+
+    // Gõ thẳng /admin mà không phải admin hệ thống: đá về gốc. Đây CHỈ là UX —
+    // backend gate độc lập bằng requireSystemAdmin, ẩn màn không phải phân quyền.
+    // Không có race: <Shell/> chỉ render khi status='authenticated' nên
+    // isSystemAdmin đã chốt, không phải giá trị mặc định lúc đang tải.
+    //
+    // restoringRef=true để lần sync sau dùng replaceState: push thì Back sẽ quay
+    // lại /admin rồi bị đá tiếp, trông như Back chết mà history thì cứ dài ra.
+    useEffect(() => {
+        if (showAdmin && !isSystemAdmin) {
+            restoringRef.current = true;
+            setShowAdmin(false);
+        }
+    }, [showAdmin, isSystemAdmin]);
 
     const activeProject = path[0] || null;
 
@@ -256,7 +280,7 @@ function Shell() {
           ? 'Sửa & lưu draft được · không có quyền publish'
           : null;
 
-    if (showAdmin) {
+    if (showAdmin && isSystemAdmin) {
         return (
             <div className="nc-app nc-app--no-sidebar">
                 <Suspense fallback={<Loader label="Đang tải Admin…" />}>
