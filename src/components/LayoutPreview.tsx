@@ -1,6 +1,7 @@
 // ── Màn Preview = vừa xem vừa SỬA layout bằng DivProEditor (editable) ──────
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
+import { openGuide } from '../lib/guide';
 import { fmtSize, fmtDate } from '../lib/format';
 import { s3 } from '../s3';
 import { objectUrl, s3DirectUrl } from '../s3/publicUrl';
@@ -120,6 +121,9 @@ export function LayoutPreview({ path, file, onBack, onPush }: Props) {
                         {Icon.eye} Preview
                     </button>
                     <button className="btn ghost sm" onClick={download}>{Icon.download} Download</button>
+                    <button className="btn ghost sm" title="Hướng dẫn: lưu, xem trước & xuất bản" onClick={() => openGuide('luu')}>
+                        {Icon.info} Hướng dẫn
+                    </button>
                     {perms.update && (
                         <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
                     )}

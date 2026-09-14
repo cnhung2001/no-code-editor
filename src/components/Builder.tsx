@@ -1,6 +1,7 @@
 // ── Màn Builder: DivProEditor đầy đủ + Save draft / Push to S3 ─────────────
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
+import { openGuide } from '../lib/guide';
 import { Loader } from './Loader';
 import { s3 } from '../s3';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
@@ -97,6 +98,11 @@ export function Builder({ path, file, isNew, onBack, onPush }: Props) {
                     <span className={'bld-tag' + (isNew ? ' new' : '')}>{isNew ? 'New · Draft' : dirty ? 'Editing*' : 'Editing'}</span>
                 </div>
                 <div className="bld-right">
+                    {/* Neo thẳng vào mục quy trình, không mở từ đầu tài liệu: người
+                        đang đứng trong Builder cần đúng phần đó, không phải "DivKit là gì". */}
+                    <button className="btn ghost sm" title="Hướng dẫn dựng UI" onClick={() => openGuide('quy-trinh')}>
+                        {Icon.info} Hướng dẫn
+                    </button>
                     {perms.update && (
                         <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
                     )}

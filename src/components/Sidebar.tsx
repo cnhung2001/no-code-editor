@@ -3,6 +3,7 @@ import { Icon } from '../lib/icons';
 import { UserMenu } from '../auth/UserMenu';
 import type { ProjectInfo, S3Item } from '../types';
 import { SkeletonRows } from './Loader';
+import { openGuide } from '../lib/guide';
 
 const BUCKET = 'ik-nocode-paywall';
 const REGION = 'ap-southeast-1';
@@ -94,6 +95,10 @@ export function Sidebar({
             )}
 
             <div className="sidebar-foot">
+                <button className="tree-item" onClick={() => openGuide()}>
+                    <span className="tree-ic">{Icon.info}</span>
+                    <span className="tree-name">Hướng dẫn</span>
+                </button>
                 {canAdmin && onAdmin && (
                     <button className="tree-item admin-link" onClick={onAdmin}>
                         <span className="tree-ic">{Icon.settings}</span>

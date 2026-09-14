@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hướng dẫn dựng UI với DivKit Builder — Tài liệu cho người không code</title>
+<style>
+  :root{
+    --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#1e1e2e; --border:#e6e8ec;
+    --text:#1f2329; --muted:#5b6675; --primary:#7c3aed; --primary-soft:#f3ecff;
+    --green:#0ea371; --green-soft:#e7f7f0; --amber:#b45309; --amber-soft:#fdf2e2;
+    --blue:#2563eb; --blue-soft:#eaf1ff; --red:#dc2626; --red-soft:#fdeaea;
+    --radius:10px; --sidebar:288px; --maxw:860px;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:var(--sans);color:var(--text);background:var(--bg);line-height:1.65;font-size:16px}
+  a{color:var(--primary);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:var(--mono);font-size:.88em;background:var(--primary-soft);color:#5b21b6;padding:.12em .4em;border-radius:5px}
+  pre{background:var(--bg-code);color:#e4e4ef;padding:16px 18px;border-radius:var(--radius);overflow:auto;font-family:var(--mono);font-size:13.5px;line-height:1.55}
+  pre code{background:none;color:inherit;padding:0;font-size:inherit}
+
+  /* layout */
+  .topbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:12px 20px}
+  .topbar .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+  .topbar .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#c084fc);display:inline-block}
+  .topbar .tag{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
+  .topbar .tabbar{display:flex;gap:6px;margin-left:18px}
+  .topbar .tabbar .tab{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 14px;font-size:14px;color:var(--text);text-decoration:none}
+  .topbar .tabbar .tab:hover{background:var(--bg-soft);text-decoration:none}
+  .topbar .tabbar .tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .menu-btn{display:none;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:18px;cursor:pointer}
+
+  .wrap{display:flex;align-items:flex-start;max-width:1280px;margin:0 auto}
+  nav.side{position:sticky;top:51px;width:var(--sidebar);height:calc(100vh - 51px);overflow-y:auto;padding:22px 14px 60px;border-right:1px solid var(--border);flex:0 0 var(--sidebar)}
+  nav.side .grp{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:18px 10px 6px}
+  nav.side a{display:block;padding:6px 10px;border-radius:7px;color:var(--text);font-size:14px}
+  nav.side a:hover{background:var(--bg-soft);text-decoration:none}
+  nav.side a.active{background:var(--primary-soft);color:#5b21b6;font-weight:600}
+
+  main{flex:1;min-width:0;padding:36px 48px 120px;max-width:calc(var(--maxw) + 96px)}
+  main h1{font-size:32px;line-height:1.2;margin:.2em 0 .3em}
+  main h2{font-size:23px;margin:2.4em 0 .5em;padding-top:12px;border-top:1px solid var(--border)}
+  main h2:first-of-type{border-top:none}
+  main h3{font-size:18px;margin:1.6em 0 .4em}
+  main p,main li{color:var(--text)}
+  .lead{font-size:18px;color:var(--muted);margin-top:0}
+  ul,ol{padding-left:22px}
+  li{margin:.25em 0}
+
+  table{border-collapse:collapse;width:100%;margin:1em 0;font-size:14.5px}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--bg-soft);font-weight:600}
+  td code{white-space:nowrap}
+
+  .callout{border:1px solid var(--border);border-left-width:4px;border-radius:8px;padding:12px 16px;margin:16px 0;background:var(--bg-soft);font-size:15px}
+  .callout .h{font-weight:700;margin-bottom:2px}
+  .callout.tip{border-left-color:var(--green);background:var(--green-soft)}
+  .callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+  .callout.note{border-left-color:var(--blue);background:var(--blue-soft)}
+  .callout.danger{border-left-color:var(--red);background:var(--red-soft)}
+
+  .steps{counter-reset:step;list-style:none;padding-left:0}
+  .steps>li{position:relative;padding:2px 0 14px 44px;margin:0}
+  .steps>li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+  .steps>li::after{content:"";position:absolute;left:13px;top:30px;bottom:0;width:2px;background:var(--border)}
+  .steps>li:last-child::after{display:none}
+
+  .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+  .pill{font-size:13px;border:1px solid var(--border);background:#fff;border-radius:20px;padding:4px 12px;color:var(--muted)}
+
+  .diagram{font-family:var(--mono);font-size:12.5px;white-space:pre;background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius);padding:16px;overflow:auto;line-height:1.4;color:var(--text)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
+  .card{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:#fff}
+  .card .ic{font-size:22px}
+  .card .t{font-weight:700;margin:6px 0 2px}
+  .card .d{font-size:13.5px;color:var(--muted)}
+
+  .kbd{font-family:var(--mono);font-size:12px;border:1px solid #c9ced6;border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:#fff}
+  hr.soft{border:none;border-top:1px solid var(--border);margin:2.5em 0}
+  footer{color:var(--muted);font-size:13.5px;border-top:1px solid var(--border);padding-top:18px;margin-top:60px}
+  .anchor{color:var(--muted);font-weight:400;opacity:0;margin-left:8px;font-size:.7em}
+  h2:hover .anchor,h3:hover .anchor{opacity:1}
+
+  @media (max-width:980px){
+    .menu-btn{display:inline-block}
+    nav.side{position:fixed;left:0;top:51px;z-index:40;background:#fff;transform:translateX(-105%);transition:transform .2s;box-shadow:0 10px 40px rgba(0,0,0,.15)}
+    nav.side.open{transform:none}
+    main{padding:24px 18px 100px}
+    main h1{font-size:26px}
+    .gallery{grid-template-columns:1fr !important}
+  }
+
+  /* figures & svg illustrations */
+  figure{margin:18px 0}
+  figure svg{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);background:#fff}
+  figure figcaption{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
+  .fig-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:18px 0}
+  .fig-row figure{margin:0}
+  .gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:18px 0}
+  .gitem{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fff}
+  .gitem .gh{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-soft);font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}
+  .gitem .gb{padding:14px}
+  .gitem .gb p{margin:.2em 0 .6em;font-size:13.5px;color:var(--muted)}
+  .gitem svg{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
+  .gitem pre{margin:10px 0 0;font-size:12px;padding:10px 12px}
+
+  /* real screenshots */
+  .shot{margin:18px 0}
+  .shot img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 14px rgba(0,0,0,.06)}
+  .shot.tall img{width:auto;max-width:100%;max-height:700px;margin:0 auto}
+  .shot-ph{display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:2px dashed #c4a7f0;border-radius:var(--radius);background:#faf7ff;color:#6d28d9;font-size:14px;text-align:center;padding:24px}
+  .shot-ph .big{font-size:26px}
+  .badge-shot{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#7c3aed;border-radius:5px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+
+  /* samples playground */
+  .samples{margin:18px 0}
+  .samples .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .samples .tabbtn{font-size:13px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--text);font-family:inherit}
+  .samples .tabbtn:hover{background:var(--bg-soft)}
+  .samples .tabbtn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .samples .ttl{font-weight:700;font-size:16px;margin:4px 0 2px}
+  .samples .desc{font-size:13.5px;color:var(--muted);margin:0 0 10px}
+  .samples .stage{display:grid;grid-template-columns:1fr 372px;gap:16px;align-items:start}
+  .samples .jsonbox{background:var(--bg-code);color:#e4e4ef;border-radius:var(--radius);padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.5;overflow:auto;max-height:520px;white-space:pre;margin:0}
+  .samples .preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;position:sticky;top:64px}
+  .samples .device{width:340px;background:#0b0b12;border-radius:22px;padding:16px;border:1px solid var(--border);min-height:220px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+  .samples .status{font-size:12.5px;color:var(--muted);text-align:center}
+  .samples .status.err{color:var(--red)}
+  @media(max-width:820px){.samples .stage{grid-template-columns:1fr}.samples .preview-wrap{position:static}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="menu-btn" id="menuBtn" aria-label="Mở menu">☰</button>
+  <span class="logo"><span class="dot"></span> DivKit Builder</span>
+  <div class="tabbar">
+    <a class="tab active" href="index.html">Tài liệu</a>
+  </div>
+</div>
+
+<div class="wrap">
+<nav class="side" id="side">
+  <div class="grp">Bắt đầu</div>
+  <a href="#gioi-thieu">1. DivKit là gì</a>
+  <a href="#nocode">★ NoCode Preview (quản lý S3)</a>
+  <a href="#giao-dien">2. Làm quen giao diện Builder</a>
+  <a href="#cay-components">3. Cây Components &amp; thành phần</a>
+  <a href="#thu-vien">★ Thư viện component (ví dụ)</a>
+
+  <div class="grp">Thao tác cơ bản</div>
+  <a href="#keo-tha">4. Thêm &amp; kéo-thả &amp; sắp xếp</a>
+  <a href="#layout">5. Layout (bố cục)</a>
+  <a href="#styling">6. Styling (định dạng)</a>
+
+  <div class="grp">Nội dung động</div>
+  <a href="#variable">7. Variable (biến) &amp; đa ngôn ngữ</a>
+  <a href="#products">8. Products (gói mua)</a>
+  <a href="#state">9. State (trạng thái chọn)</a>
+  <a href="#timers">10. Timers (hẹn giờ)</a>
+  <a href="#actions">11. Actions (hành động)</a>
+
+  <div class="grp">Hoàn thiện</div>
+  <a href="#quy-uoc">12. Quy ước &amp; mẹo vàng</a>
+  <a href="#quy-trinh">13. Quy trình dựng 1 màn hình</a>
+  <a href="#luu">14. Lưu, xem trước &amp; xuất bản</a>
+  <a href="#tu-dien">Từ điển thuật ngữ</a>
+</nav>
+
+<main>
+  <h1>Hướng dẫn dựng UI với DivKit Builder</h1>
+  <p class="lead">Tài liệu dành cho người <strong>không biết lập trình</strong>: cách kéo-thả các khối, sắp xếp bố cục (layout), định dạng (styling) và làm cho màn hình "sống" với biến, gói mua và trạng thái — tất cả ngay trong trình dựng trực quan.</p>
+
+  <div class="callout note">
+    <div class="h">Đọc tài liệu này như thế nào?</div>
+    Nếu bạn mới bắt đầu, hãy đọc lần lượt phần 1 → 6. Đó là đủ để dựng một màn hình tĩnh hoàn chỉnh. Các phần 7 → 11 dành cho khi bạn muốn màn hình có giá tiền thật, đổi gói, đếm ngược... Phần 12 → 14 là mẹo và quy trình để ra sản phẩm.
+  </div>
+
+  <div class="callout note">
+    <div class="h">Về hình minh hoạ</div>
+    Các hình trong tài liệu là <strong>mô phỏng SVG vẽ sát giao diện Builder thật</strong> — nhúng thẳng trong file nên luôn hiển thị, không cần tải ảnh rời. Nếu muốn thay bằng ảnh chụp thật, bạn có thể chụp Builder (Mac: <span class="kbd">Cmd+Shift+4</span>) và lưu cạnh file này.
+  </div>
+
+  <!-- 1 -->
+  <h2 id="gioi-thieu">1. DivKit là gì <a class="anchor" href="#gioi-thieu">#</a></h2>
+  <p><strong>DivKit</strong> là cách dựng giao diện ứng dụng bằng cách mô tả nó dưới dạng các <em>khối xếp lồng nhau</em> (gọi là JSON), thay vì lập trình từng màn hình. Ưu điểm lớn nhất: màn hình được nạp <strong>từ server</strong> ("server-driven UI"), nên bạn có thể <strong>đổi giao diện mà không cần cập nhật app</strong> — chỉ cần sửa cấu hình rồi lưu.</p>
+  <p>Bạn <strong>không cần viết JSON bằng tay</strong>. Trình <strong>Builder</strong> cho phép kéo-thả các khối; phía sau, Builder tự sinh ra JSON đó. Tài liệu này dạy bạn dùng Builder.</p>
+
+  <figure class="shot tall">
+    <img src="images/builder-06-device-preview.jpg" alt="Màn paywall thật trong khung xem trước">
+    <figcaption>Ảnh thật: một màn hình paywall dựng bằng DivKit, hiển thị trong khung xem trước của Builder — đây là kiểu kết quả bạn sẽ tạo ra.</figcaption>
+  </figure>
+
+  <div class="cards">
+    <div class="card"><div class="ic">🧱</div><div class="t">Mọi thứ là "khối"</div><div class="d">Một màn hình = nhiều khối lồng nhau: khung chứa, chữ, ảnh.</div></div>
+    <div class="card"><div class="ic">🖱️</div><div class="t">Kéo-thả</div><div class="d">Thêm và sắp xếp khối bằng chuột trong cây Components.</div></div>
+    <div class="card"><div class="ic">☁️</div><div class="t">Cập nhật tức thì</div><div class="d">Sửa trên server → app hiển thị ngay, không cần lên store.</div></div>
+    <div class="card"><div class="ic">📐</div><div class="t">Tự co giãn</div><div class="d">Một bố cục chạy đẹp trên cả màn nhỏ lẫn màn lớn.</div></div>
+  </div>
+
+  <h3>3 loại khối bạn sẽ dùng 90% thời gian</h3>
+  <table>
+    <thead><tr><th>Khối</th><th>Là gì</th><th>Ví dụ</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Container</strong> (Khung chứa)</td><td>Một cái hộp để xếp các khối khác vào, theo chiều dọc/ngang/chồng lên nhau.</td><td>Một thẻ gói cước, một hàng nút, cả màn hình.</td></tr>
+      <tr><td><strong>Text</strong> (Chữ)</td><td>Một đoạn chữ.</td><td>Tiêu đề, mô tả, nhãn nút, giá tiền.</td></tr>
+      <tr><td><strong>Image</strong> (Ảnh)</td><td>Một hình ảnh từ đường link (URL).</td><td>Ảnh nền, icon, hình minh hoạ.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- nocode preview -->
+  <h2 id="nocode">★ NoCode Preview — duyệt &amp; xuất bản layout trên S3 <a class="anchor" href="#nocode">#</a></h2>
+  <p><strong>NoCode Preview</strong> là web giúp bạn <strong>quản lý remote layout đang lưu trên S3</strong>: duyệt bucket → xem/sửa layout bằng chính trình DivKit Visual Editor → <strong>đẩy (publish) ngược lên S3</strong> kèm phiên bản và làm mới CDN. Nhờ vậy bạn đổi giao diện mà <strong>không cần phát hành lại app</strong>.</p>
+  <p>Ứng dụng có 2 phần nhưng bạn chỉ mở <strong>một địa chỉ duy nhất</strong>: <code>localhost:8080</code> khi chạy ở máy, hoặc <code>nocode.ikame-solution.com</code> khi dùng bản đã triển khai. Backend nằm sau địa chỉ đó và giữ khoá AWS — web không bao giờ chạm trực tiếp vào khoá. <em>(Đừng mở cổng <code>5173</code>: đó là dev server nội bộ, mở thẳng sẽ hỏng đăng nhập.)</em></p>
+
+  <figure>
+  <svg viewBox="0 0 880 150" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+    <rect x="14" y="44" width="150" height="62" rx="10" fill="#eaf1ff" stroke="#9cbcf5"/><text x="89" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#2563eb">① Browser</text><text x="89" y="90" font-size="10" text-anchor="middle" fill="#2563eb">duyệt bucket S3</text>
+    <text x="180" y="80" font-size="20" fill="#9aa3af">→</text>
+    <rect x="208" y="44" width="150" height="62" rx="10" fill="#f3ecff" stroke="#c4a7f0"/><text x="283" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#6d28d9">② Preview / Builder</text><text x="283" y="90" font-size="10" text-anchor="middle" fill="#7c3aed">sửa bằng DivKit editor</text>
+    <text x="374" y="80" font-size="20" fill="#9aa3af">→</text>
+    <rect x="402" y="30" width="150" height="40" rx="9" fill="#fdf2e2" stroke="#f5b86a"/><text x="477" y="55" font-size="12" font-weight="700" text-anchor="middle" fill="#b45309">Save draft</text>
+    <rect x="402" y="80" width="150" height="40" rx="9" fill="#e7f7f0" stroke="#67c9a3"/><text x="477" y="105" font-size="12" font-weight="700" text-anchor="middle" fill="#0ea371">Push to S3 (publish)</text>
+    <text x="568" y="80" font-size="20" fill="#9aa3af">→</text>
+    <rect x="596" y="44" width="120" height="62" rx="10" fill="#f7f8fa" stroke="#cbd0d8"/><text x="656" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#1f2329">S3 + CDN</text><text x="656" y="90" font-size="10" text-anchor="middle" fill="#5b6675">version · invalidate</text>
+    <text x="724" y="80" font-size="20" fill="#9aa3af">→</text>
+    <rect x="752" y="44" width="116" height="62" rx="10" fill="#1b1530"/><text x="810" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">App người dùng</text><text x="810" y="90" font-size="10" text-anchor="middle" fill="#b9b2cf">cập nhật ngay</text>
+  </svg>
+  <figcaption>Luồng làm việc của NoCode Preview: duyệt → sửa → lưu nháp / xuất bản → S3/CDN → tới app người dùng mà không cần lên store.</figcaption>
+  </figure>
+
+  <h3>Ba màn hình chính</h3>
+  <table>
+    <thead><tr><th>Màn</th><th>Dùng để</th></tr></thead>
+    <tbody>
+      <tr><td><strong>① Browser</strong> (duyệt)</td><td>Cột trái hiện bucket <code>ik-nocode-paywall</code> (region <code>ap-southeast-1</code>) và danh sách <strong>Projects</strong> kèm số layout. Khu giữa là breadcrumb + ô tìm kiếm + lưới thẻ layout. Mỗi thẻ ghi tên, <strong>trạng thái</strong> (Live/Draft/Archived), version, kích thước, ngày sửa. Mở thư mục để đi sâu; mở file <code>.json</code> để xem; ảnh/HTML mở cửa sổ xem nhanh.</td></tr>
+      <tr><td><strong>② Preview</strong> (xem &amp; sửa nhanh)</td><td>Mở một layout và hiển thị <strong>render thật</strong> bằng DivKit editor (sửa được). Thanh trên có: ← quay lại, tên file (dấu <code>*</code> nếu có thay đổi chưa lưu), <strong>Metadata</strong>, <strong>Download</strong>, <strong>Save draft</strong>, <strong>Push to S3</strong>.</td></tr>
+      <tr><td><strong>③ Builder</strong> (sửa đầy đủ)</td><td>Trình sửa đầy đủ: cây khối + preview + bảng thuộc tính/code, palette, hoàn tác/làm lại — chính là DivKit Visual Editor mà các phần 2–14 của tài liệu này mô tả. Đổi được tên layout, rồi <strong>Save draft</strong> / <strong>Push to S3</strong>. Bấm <strong>New layout</strong> ở Browser sẽ mở Builder với một màn trống (Container dọc, nền trắng).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Trạng thái layout</h3>
+  <ul>
+    <li><strong>Live</strong> — bản đang chạy thật cho người dùng.</li>
+    <li><strong>Draft</strong> — bản nháp, lưu trên S3 nhưng chưa phát hành.</li>
+    <li><strong>Archived</strong> — bản lưu trữ, không dùng nữa.</li>
+  </ul>
+
+  <h3>Lưu nháp vs Xuất bản</h3>
+  <p><strong>Save draft</strong> ghi bản nháp lên S3 (trạng thái <em>draft</em>) — chưa ảnh hưởng app thật, để bạn lưu tạm và xem lại.</p>
+  <p><strong>Push to S3</strong> mở hộp xác nhận trước khi phát hành, gồm:</p>
+  <ul>
+    <li><strong>Target</strong> — đường dẫn S3 sẽ ghi (ví dụ <code>s3://ik-nocode-paywall/&lt;project&gt;/&lt;layout&gt;.json</code>).</li>
+    <li><strong>Thay đổi</strong> — so sánh bản cũ và bản mới (diff) để bạn rà trước khi ghi.</li>
+    <li><strong>Commit message</strong> — ghi chú thay đổi (ví dụ "tăng giá yearly, đổi hero").</li>
+    <li>☑ <strong>Bump version &amp; giữ bản cũ để rollback</strong> — tạo phiên bản mới, giữ bản cũ để quay lui khi cần.</li>
+    <li>☑ <strong>Invalidate CDN cache sau khi publish</strong> — làm mới CDN để thay đổi tới người dùng ngay.</li>
+  </ul>
+  <div class="callout warn"><div class="h">Đây là thao tác ghi thật lên S3</div><strong>Push to S3</strong> và <strong>Delete</strong> tác động trực tiếp lên dữ liệu thật. Hãy rà phần diff trước khi Publish; nếu lỡ, dùng bản version cũ để rollback. Khi chỉ muốn thử, hãy dùng chế độ an toàn bên dưới.</div>
+
+  <h3>Chế độ an toàn &amp; cấu hình</h3>
+  <ul>
+    <li><strong>Mock mode</strong> (<code>VITE_USE_MOCK=true</code>): dùng dữ liệu giả, không gọi S3 — tập làm quen thoải mái. Có dải băng "MOCK MODE" trên đầu.</li>
+    <li><strong>Chỉ xem</strong> (<code>VITE_ALLOW_PUSH=false</code>): ẩn các nút ghi (Push/Save/Delete/New) — chỉ xem và sửa thử, không đụng S3. Có nhãn "Chế độ chỉ xem".</li>
+    <li><strong>Định dạng lưu</strong> (<code>VITE_SAVE_FORMAT</code>): <code>plain</code> (DivKit thuần — tương thích client cũ) hoặc <code>wrapper</code> (<code>{screen_id, label, remote_layout, variables}</code>). <em>Cần xác nhận với team mobile dùng định dạng nào.</em></li>
+  </ul>
+
+  <!-- 2 -->
+  <h2 id="giao-dien">2. Làm quen giao diện Builder <a class="anchor" href="#giao-dien">#</a></h2>
+  <p>Màn hình Builder chia làm <strong>3 khu vực chính</strong>, giống mọi trình thiết kế trực quan:</p>
+
+  <div class="diagram">┌──────────────────────────────────────────────────────────────────────┐
+│  Thanh công cụ:  [375x812 ▼] [☀/🌙] [↶ ↷]  [0 ✕  0 ⚠]      [Figma] [Save] │
+├───────────────┬───────────────────────────────┬──────────────────────┤
+│  ① CÂY        │      ② KHUNG XEM TRƯỚC         │   ③ BẢNG THUỘC TÍNH    │
+│  COMPONENTS   │         (canvas)              │                       │
+│               │                               │   Chọn 1 khối ở cây   │
+│  Root         │     ┌───────────────┐         │   để chỉnh:           │
+│   └ Container │     │  Device found │         │   • Kích thước        │
+│      ├ Image  │     │  ...          │         │   • Padding / Margin  │
+│      ├ Text   │     │  [Start Trial]│         │   • Màu, viền, chữ    │
+│      └ State  │     └───────────────┘         │   • Hành động         │
+└───────────────┴───────────────────────────────┴──────────────────────┘
+  (Tab trái dọc: Components · Palette · Variable · Timers · Products · Tanker)</div>
+
+  <figure class="shot">
+    <img src="images/builder-01-tong-quan.jpg" alt="Toàn cảnh Builder">
+    <figcaption>Ảnh thật: toàn cảnh Builder — ① cây Components (trái), ② khung xem trước (giữa), ③ bảng thuộc tính (phải).</figcaption>
+  </figure>
+
+  <ol>
+    <li><strong>① Cây Components (trái)</strong> — danh sách tất cả khối trên màn hình, lồng nhau theo thứ bậc cha–con. Đây là nơi bạn <strong>thêm, kéo-thả, sắp xếp</strong>.</li>
+    <li><strong>② Khung xem trước (giữa)</strong> — màn hình thật sẽ trông như thế nào. Bấm vào một khối ở đây cũng chọn được nó.</li>
+    <li><strong>③ Bảng thuộc tính (phải)</strong> — khi chọn một khối, mọi cài đặt của nó hiện ra ở đây để bạn chỉnh. Khi chưa chọn gì, nó ghi "Choose the component".</li>
+  </ol>
+
+  <h3>Các tab dọc bên trái</h3>
+  <table>
+    <thead><tr><th>Tab</th><th>Dùng để</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Components</strong></td><td>Cây các khối của màn hình (tab mặc định, dùng nhiều nhất).</td></tr>
+      <tr><td><strong>Palette</strong></td><td>Kho khối mẫu / thành phần dựng sẵn để kéo vào.</td></tr>
+      <tr><td><strong>Variable</strong></td><td>Khai báo và quản lý <em>biến</em> (chữ đa ngôn ngữ, màu, link ảnh...). Xem phần 7.</td></tr>
+      <tr><td><strong>Timers</strong></td><td>Hẹn giờ: ví dụ 3 giây mới hiện nút đóng. Xem phần 10.</td></tr>
+      <tr><td><strong>Products</strong></td><td>Khai báo các gói mua (IAP) để lấy giá thật. Xem phần 8.</td></tr>
+      <tr><td><strong>Tanker</strong></td><td>Quản lý chuỗi dịch / khoá ngôn ngữ.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Thanh công cụ phía trên</h3>
+  <figure class="shot">
+    <img src="images/builder-07-toolbar.jpg" alt="Thanh công cụ Builder">
+    <figcaption>Ảnh thật: thanh công cụ — chọn kích thước thiết bị (375×812), nút sáng/tối, hoàn tác/làm lại, và số lỗi (✕)/cảnh báo (⚠).</figcaption>
+  </figure>
+  <ul>
+    <li><span class="pill">375x812 ▼</span> Chọn <strong>kích thước thiết bị</strong> để xem trước (iPhone nhỏ, lớn, máy tính bảng…). Luôn kiểm tra trên vài kích thước.</li>
+    <li><span class="pill">☀ / 🌙</span> Bật/tắt <strong>chế độ sáng–tối</strong> để xem màn hình ở cả hai nền.</li>
+    <li><span class="pill">↶ ↷</span> <strong>Hoàn tác / Làm lại</strong> (<span class="kbd">Ctrl/⌘ + Z</span>). Cứ mạnh dạn thử, sai thì hoàn tác.</li>
+    <li><span class="pill">0 ✕ &nbsp; 0 ⚠</span> Số <strong>lỗi</strong> (đỏ) và <strong>cảnh báo</strong> (vàng). Phải đưa lỗi về 0 trước khi lưu.</li>
+    <li><span class="pill">Figma</span> Nhập màn hình từ thiết kế Figma.</li>
+    <li><span class="pill">Save</span> Lưu lại. Xem phần 14.</li>
+  </ul>
+
+  <!-- 3 -->
+  <h2 id="cay-components">3. Cây Components &amp; các thành phần <a class="anchor" href="#cay-components">#</a></h2>
+  <p>Cây Components thể hiện <strong>quan hệ cha–con</strong>: khối nằm bên trong khối nào thì thụt vào trong khối đó. <strong>Root component</strong> là gốc — mọi thứ nằm trong nó.</p>
+
+  <div class="diagram">Root component                ← gốc màn hình
+ ├ Image                      ← ảnh nền
+ └ Container (dọc)            ← khung nội dung chính
+    ├ Container (ngang)       ← một hàng (icon + chữ)
+    │   ├ Image               ← icon
+    │   └ Text                ← "Ads Free Experience"
+    ├ Container               ← thẻ gói "Weekly"
+    └ State                   ← phần đổi theo gói đang chọn</div>
+
+  <p>Khi bấm <strong>+ Add</strong>, hộp <em>Add component</em> hiện ra, chia làm <strong>Basic components</strong> (khối nền tảng) và <strong>Additional components</strong> (khối nâng cao). Các khối cơ bản gồm:</p>
+  <table>
+    <thead><tr><th>Khối</th><th>Công dụng</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Image</strong></td><td>Ảnh tĩnh (PNG/JPG/SVG) từ URL.</td></tr>
+      <tr><td><strong>Gif-image</strong></td><td>Ảnh động GIF (cũng dùng làm phương án dự phòng cho Lottie).</td></tr>
+      <tr><td><strong>Text</strong></td><td>Chữ.</td></tr>
+      <tr><td><strong>Container</strong></td><td>Khung chứa — xếp con theo dọc, ngang hoặc chồng lên nhau.</td></tr>
+      <tr><td><strong>Gallery</strong></td><td>Dải cuộn ngang/dọc chứa nhiều khối.</td></tr>
+      <tr><td><strong>Separator</strong></td><td>Đường kẻ ngăn cách.</td></tr>
+      <tr><td><strong>Lottie</strong></td><td>Hoạt hình Lottie (file JSON động).</td></tr>
+      <tr><td><strong>Button</strong></td><td>Nút bấm dựng sẵn.</td></tr>
+      <tr><td><strong>Cross button</strong></td><td>Nút đóng (✕) dựng sẵn.</td></tr>
+    </tbody>
+  </table>
+  <p>Khối <strong>State</strong> (đổi hình theo trạng thái — ví dụ gói được chọn / không chọn) nằm trong nhóm khối nâng cao; xem phần 9.</p>
+
+  <figure class="shot tall">
+    <img src="images/builder-02b-add-component-panel.jpg" alt="Hộp Add component">
+    <figcaption>Ảnh thật: hộp <em>Add component</em> — nhóm Basic components (Image, Gif-image, Text, Container, Gallery, Separator, Lottie, Button, Cross button) và mục Additional components mở rộng (gồm cả State).</figcaption>
+  </figure>
+
+  <figure class="shot tall">
+    <img src="images/builder-04-cay-components.jpg" alt="Cây Components">
+    <figcaption>Ảnh thật: cây Components — quan hệ cha–con thể hiện bằng độ thụt lề; hàng tô tím là khối đang chọn; dấu ⋯ bên phải mỗi hàng mở menu thêm/xoá.</figcaption>
+  </figure>
+  <div class="callout tip"><div class="h">Mẹo đặt tên</div>Bấm đúp vào tên một khối để <strong>đổi tên</strong>. Đặt tên có nghĩa ("Thẻ gói tuần", "Hàng tính năng 1") giúp cây dễ đọc hơn nhiều so với "Container, Container, Container".</div>
+
+  <!-- gallery -->
+  <h2 id="thu-vien">★ Thư viện component — ví dụ trực quan <a class="anchor" href="#thu-vien">#</a></h2>
+  <p>Mỗi thẻ dưới đây: hình minh hoạ kết quả + cài đặt chính tương ứng. Đây là những khối bạn lắp ráp để tạo nên màn hình.</p>
+
+  <div class="gallery">
+
+    <div class="gitem">
+      <div class="gh">▤ Container · dọc (vertical)</div>
+      <div class="gb">
+        <p>Xếp các con từ trên xuống. Dùng cho cả màn hình, danh sách.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="14" width="220" height="122" rx="8" fill="#faf7ff" stroke="#c9b8f0" stroke-dasharray="4 3"/>
+          <rect x="36" y="28" width="188" height="26" rx="5" fill="#a855f7"/><text x="130" y="45" font-size="11" fill="#fff" text-anchor="middle">Con 1</text>
+          <rect x="36" y="62" width="188" height="26" rx="5" fill="#c084fc"/><text x="130" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 2</text>
+          <rect x="36" y="96" width="188" height="26" rx="5" fill="#d8b4fe"/><text x="130" y="113" font-size="11" fill="#4c1d95" text-anchor="middle">Con 3</text>
+        </svg>
+        <pre><code>orientation: vertical</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">▥ Container · ngang (horizontal)</div>
+      <div class="gb">
+        <p>Xếp các con từ trái sang phải. Dùng cho icon + chữ, nút + giá.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="40" width="220" height="70" rx="8" fill="#faf7ff" stroke="#c9b8f0" stroke-dasharray="4 3"/>
+          <rect x="34" y="56" width="58" height="38" rx="5" fill="#a855f7"/><text x="63" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 1</text>
+          <rect x="100" y="56" width="58" height="38" rx="5" fill="#c084fc"/><text x="129" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 2</text>
+          <rect x="166" y="56" width="58" height="38" rx="5" fill="#d8b4fe"/><text x="195" y="79" font-size="11" fill="#4c1d95" text-anchor="middle">Con 3</text>
+        </svg>
+        <pre><code>orientation: horizontal</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">▩ Container · chồng (overlap)</div>
+      <div class="gb">
+        <p>Con sau đè lên con trước. Dùng cho nhãn "BEST OFFER" trên góc thẻ.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <rect x="40" y="40" width="180" height="70" rx="8" fill="#2a2440"/><text x="130" y="82" font-size="11" fill="#fff" text-anchor="middle">Thẻ gói</text>
+          <rect x="150" y="30" width="78" height="22" rx="11" fill="#f59e0b"/><text x="189" y="45" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">BEST OFFER</text>
+        </svg>
+        <pre><code>orientation: overlap</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">T Text · chữ</div>
+      <div class="gb">
+        <p>Một đoạn chữ: cỡ, độ đậm, màu, căn lề.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="260" height="150" fill="#1b1530"/>
+          <text x="130" y="58" font-size="20" font-weight="700" fill="#fff" text-anchor="middle">Device found</text>
+          <text x="130" y="86" font-size="12" fill="#b9b2cf" text-anchor="middle">Enjoy your TV now</text>
+        </svg>
+        <pre><code>font_size: 20 · font_weight: bold
+text_color: #FFFFFF · font_size_unit: dp</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">🖼 Image · ảnh</div>
+      <div class="gb">
+        <p>Ảnh từ URL. <code>scale</code> quyết định cách lấp khung.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="ig" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+          <rect x="20" y="16" width="220" height="118" rx="8" fill="url(#ig)"/>
+          <circle cx="80" cy="58" r="16" fill="#fde68a"/>
+          <path d="M40 120 L100 74 L140 104 L180 70 L220 110 L220 134 L40 134 Z" fill="#4c1d95" opacity="0.6"/>
+        </svg>
+        <pre><code>image_url: @{url_image_hero}
+scale: fill   (fill / fit / no_scale)</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">◈ State · trạng thái chọn</div>
+      <div class="gb">
+        <p>Một khối, hai hình: được chọn vs không chọn.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <rect x="14" y="30" width="110" height="90" rx="9" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
+          <circle cx="34" cy="52" r="7" fill="#7c3aed"/><text x="50" y="56" font-size="11" font-weight="700" fill="#4c1d95">Weekly</text>
+          <text x="30" y="92" font-size="10" fill="#6d28d9">selected</text>
+          <rect x="136" y="30" width="110" height="90" rx="9" fill="#fff" stroke="#e5e5e5" stroke-width="1.5"/>
+          <circle cx="156" cy="52" r="7" fill="none" stroke="#cbd0d8" stroke-width="2"/><text x="172" y="56" font-size="11" fill="#5b6675">Yearly</text>
+          <text x="152" y="92" font-size="10" fill="#9aa3af">unselected</text>
+        </svg>
+        <pre><code>states: [selected, unselected]
+default_state_id: selected</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">▭ Separator · đường kẻ</div>
+      <div class="gb">
+        <p>Vạch ngăn cách giữa các khối.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <text x="20" y="44" font-size="12" fill="#1f2329">Mục A</text>
+          <line x1="20" y1="62" x2="240" y2="62" stroke="#e6e8ec" stroke-width="2"/>
+          <text x="20" y="92" font-size="12" fill="#1f2329">Mục B</text>
+          <line x1="20" y1="110" x2="240" y2="110" stroke="#e6e8ec" stroke-width="2"/>
+        </svg>
+        <pre><code>type: separator</code></pre>
+      </div>
+    </div>
+
+    <div class="gitem">
+      <div class="gh">🔘 Nút bấm (Container có action)</div>
+      <div class="gb">
+        <p>Một Container bo góc, có nền và gắn hành động khi chạm.</p>
+        <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
+          <rect x="30" y="55" width="200" height="44" rx="12" fill="#a855f7"/>
+          <text x="120" y="82" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Start Free Trial</text>
+          <text x="205" y="82" font-size="14" fill="#fff">→</text>
+        </svg>
+        <pre><code>action: div-action://paywall/purchase
+        ?variable_id=@{selected_plan}</code></pre>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 4 -->
+  <h2 id="keo-tha">4. Thêm, kéo-thả &amp; sắp xếp <a class="anchor" href="#keo-tha">#</a></h2>
+
+  <h3>Thêm một khối</h3>
+  <ol class="steps">
+    <li>Bấm nút <strong>+ Add</strong> ở đầu cây Components (hoặc dấu <strong>⋯</strong> bên cạnh một khối để thêm vào trong nó).</li>
+    <li>Chọn loại khối cần thêm (Container / Text / Image…).</li>
+    <li>Khối mới xuất hiện trong cây và trong khung xem trước. Chọn nó để chỉnh ở bảng thuộc tính bên phải.</li>
+  </ol>
+  <div class="callout note"><div class="h">Nguyên tắc</div>Hầu hết bố cục nên <strong>bắt đầu bằng một Container</strong> rồi thêm các khối con vào trong. Container chính là bộ khung giữ mọi thứ đúng chỗ.</div>
+
+  <h3>Kéo-thả: làm con &nbsp;hay&nbsp; sắp xếp lại?</h3>
+  <p>Đây là kỹ năng quan trọng nhất. Khi kéo một khối trong cây Components, hãy quan sát chỉ báo:</p>
+  <table>
+    <thead><tr><th>Bạn thấy</th><th>Nghĩa là</th><th>Kết quả</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Một ô được tô đậm</strong> (thả lên giữa một khối khác)</td><td>Đưa khối đang kéo vào <em>bên trong</em> khối kia</td><td>Trở thành <strong>con</strong> của khối đó</td></tr>
+      <tr><td><strong>Một vạch mảnh</strong> (thả ở phía trên/dưới một khối)</td><td>Chèn lên trên hoặc xuống dưới khối kia</td><td><strong>Sắp xếp lại</strong> thứ tự, cùng cấp</td></tr>
+    </tbody>
+  </table>
+  <figure>
+  <svg viewBox="0 0 560 200" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+    <!-- left: child -->
+    <text x="140" y="24" font-size="12" font-weight="700" fill="#0ea371" text-anchor="middle">Ô tô đậm → thành CON</text>
+    <rect x="40" y="36" width="200" height="44" rx="6" fill="#e7f7f0" stroke="#0ea371" stroke-width="2"/>
+    <text x="140" y="62" font-size="12" fill="#0ea371" text-anchor="middle">Container đích (được tô)</text>
+    <rect x="70" y="92" width="140" height="34" rx="6" fill="#a855f7" opacity="0.92"/><text x="140" y="114" font-size="11" fill="#fff" text-anchor="middle">khối đang kéo ⤵</text>
+    <text x="140" y="150" font-size="11" fill="#5b6675" text-anchor="middle">→ nằm BÊN TRONG container đích</text>
+    <!-- divider -->
+    <line x1="300" y1="20" x2="300" y2="180" stroke="#e6e8ec"/>
+    <!-- right: reorder -->
+    <text x="430" y="24" font-size="12" font-weight="700" fill="#2563eb" text-anchor="middle">Vạch mảnh → ĐỔI THỨ TỰ</text>
+    <rect x="340" y="36" width="180" height="30" rx="6" fill="#f7f8fa" stroke="#e6e8ec"/><text x="430" y="56" font-size="11" fill="#5b6675" text-anchor="middle">Khối A</text>
+    <line x1="340" y1="76" x2="520" y2="76" stroke="#2563eb" stroke-width="3"/>
+    <rect x="356" y="84" width="148" height="28" rx="6" fill="#a855f7" opacity="0.92"/><text x="430" y="103" font-size="11" fill="#fff" text-anchor="middle">khối đang kéo</text>
+    <rect x="340" y="120" width="180" height="30" rx="6" fill="#f7f8fa" stroke="#e6e8ec"/><text x="430" y="140" font-size="11" fill="#5b6675" text-anchor="middle">Khối B</text>
+    <text x="430" y="172" font-size="11" fill="#5b6675" text-anchor="middle">→ chèn giữa A và B, cùng cấp</text>
+  </svg>
+  <figcaption>Quan sát chỉ báo khi thả: vùng tô đậm đưa khối vào trong; vạch kẻ mảnh chỉ sắp xếp lại thứ tự.</figcaption>
+  </figure>
+
+  <div class="callout tip"><div class="h">Quy tắc nhớ</div><strong>Ô tô đậm = vào trong. Vạch mảnh = đổi thứ tự.</strong> Thứ tự con trong Container quyết định thứ tự hiển thị (trên→dưới nếu dọc, trái→phải nếu ngang).</div>
+
+  <h3>Xoá, nhân bản, hoàn tác</h3>
+  <ul>
+    <li><strong>Xoá:</strong> chọn khối → biểu tượng thùng rác (hoặc menu <strong>⋯</strong>).</li>
+    <li><strong>Nhân bản (copy):</strong> chọn khối → <span class="kbd">Ctrl/⌘ + C</span> rồi <span class="kbd">Ctrl/⌘ + V</span>. Rất hữu ích để tạo nhiều thẻ gói giống nhau.</li>
+    <li><strong>Đổi tên:</strong> bấm đúp vào tên.</li>
+    <li><strong>Sai thì hoàn tác:</strong> <span class="kbd">Ctrl/⌘ + Z</span>.</li>
+  </ul>
+
+  <!-- 5 -->
+  <h2 id="layout">5. Layout — sắp xếp bố cục <a class="anchor" href="#layout">#</a></h2>
+  <p>Layout là cách các khối <em>nằm cạnh nhau và chiếm chỗ</em>. Có 4 nhóm cài đặt cần nắm: <strong>hướng</strong>, <strong>kích thước</strong>, <strong>khoảng cách</strong>, và <strong>căn lề</strong>.</p>
+
+  <h3>5.1 Hướng sắp xếp — <code>orientation</code></h3>
+  <p>Đặt trên một Container, quyết định các con xếp thế nào:</p>
+  <table>
+    <thead><tr><th>Giá trị</th><th>Các con xếp</th><th>Dùng cho</th></tr></thead>
+    <tbody>
+      <tr><td><code>vertical</code> (mặc định)</td><td>Theo cột, trên xuống dưới</td><td>Cả màn hình, danh sách tính năng</td></tr>
+      <tr><td><code>horizontal</code></td><td>Theo hàng, trái sang phải</td><td>Icon + chữ, nút + giá</td></tr>
+      <tr><td><code>overlap</code></td><td>Chồng lên nhau (con sau đè con trước)</td><td>Nhãn "BEST OFFER" đè lên góc thẻ</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Kích thước — <code>width</code> &amp; <code>height</code></h3>
+  <p>Mỗi khối khai báo riêng chiều rộng và chiều cao. Có 3 kiểu:</p>
+  <table>
+    <thead><tr><th>Kiểu</th><th>Nghĩa</th><th>Khi nào dùng</th></tr></thead>
+    <tbody>
+      <tr><td><code>wrap_content</code> (vừa nội dung)</td><td>Khối chỉ to bằng nội dung bên trong</td><td>Mặc định cho Text và Image</td></tr>
+      <tr><td><code>match_parent</code> (đầy khung cha)</td><td>Khối kéo dài hết chỗ của cha</td><td>Nút trải ngang, khung nền</td></tr>
+      <tr><td><code>fixed</code> (cố định)</td><td>Một số đo cụ thể, ví dụ 48 dp</td><td>Icon 32×32, nút cao 56</td></tr>
+    </tbody>
+  </table>
+
+  <figure>
+  <svg viewBox="0 0 880 150" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+    <rect x="14" y="18" width="270" height="114" rx="8" fill="#f7f8fa" stroke="#e6e8ec"/>
+    <text x="149" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#1f2329">wrap_content</text>
+    <rect x="100" y="56" width="98" height="40" rx="6" fill="#a855f7"/><text x="149" y="81" font-size="11" fill="#fff" text-anchor="middle">vừa nội dung</text>
+    <text x="149" y="120" font-size="11" text-anchor="middle" fill="#5b6675">to bằng đúng nội dung</text>
+
+    <rect x="304" y="18" width="270" height="114" rx="8" fill="#f7f8fa" stroke="#e6e8ec"/>
+    <text x="439" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#1f2329">match_parent</text>
+    <rect x="318" y="56" width="242" height="40" rx="6" fill="#7c3aed"/><text x="439" y="81" font-size="11" fill="#fff" text-anchor="middle">đầy khung cha</text>
+    <text x="439" y="120" font-size="11" text-anchor="middle" fill="#5b6675">kéo dài hết chỗ của cha</text>
+
+    <rect x="594" y="18" width="270" height="114" rx="8" fill="#f7f8fa" stroke="#e6e8ec"/>
+    <text x="729" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#1f2329">fixed: 120</text>
+    <rect x="669" y="56" width="120" height="40" rx="6" fill="#c084fc"/><text x="729" y="81" font-size="11" fill="#fff" text-anchor="middle">cố định</text>
+    <text x="729" y="120" font-size="11" text-anchor="middle" fill="#5b6675">một số đo cụ thể (dp)</text>
+  </svg>
+  <figcaption>Ba kiểu chiều rộng/chiều cao của một khối.</figcaption>
+  </figure>
+
+  <div class="callout warn"><div class="h">Bắt buộc đặt width &amp; height cho Text và Image</div>Nếu để trống, một số thiết bị tự hiểu là "đầy khung cha" khiến chữ bị kéo giãn và vỡ bố cục. Với chữ và ảnh nên để cả hai là <code>wrap_content</code>, trừ khi cố ý cho chiếm trọn một ô.</div>
+
+  <h3>Chia chỗ thừa bằng <code>weight</code></h3>
+  <p>Khi nhiều khối cùng đặt <code>match_parent</code> trong một Container, dùng <strong>weight</strong> để chia phần chỗ còn thừa. Ví dụ trong một hàng ngang: nhãn đặt <code>weight: 1</code> để "đẩy" giá tiền sát mép phải; hoặc ảnh minh hoạ đặt <code>weight: 1</code> theo chiều dọc để <strong>tự nở ra lấp khoảng trống</strong> trên màn hình cao.</p>
+
+  <h3>5.3 Khoảng cách — Padding &amp; Margin</h3>
+  <figure>
+  <svg viewBox="0 0 560 230" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+    <rect x="20" y="20" width="520" height="190" rx="8" fill="#fdf2e2" stroke="#f5b86a" stroke-dasharray="5 4"/>
+    <text x="34" y="40" font-size="12" font-weight="700" fill="#b45309">margin — lề NGOÀI (đẩy khối ra xa khối khác)</text>
+    <rect x="70" y="58" width="420" height="130" rx="8" fill="#e7f7f0" stroke="#67c9a3"/>
+    <text x="84" y="78" font-size="12" font-weight="700" fill="#0ea371">padding — đệm TRONG (đẩy nội dung vào)</text>
+    <rect x="130" y="96" width="300" height="74" rx="6" fill="#7c3aed"/>
+    <text x="280" y="138" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Nội dung</text>
+  </svg>
+  <figcaption>margin nằm ngoài viền khối; padding nằm trong viền, ôm lấy nội dung.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Padding</strong> = đệm <em>bên trong</em> khối, đẩy nội dung tránh xa viền. Đặt trên Container để nội dung không dính sát mép màn hình (thường 16).</li>
+    <li><strong>Margin</strong> = lề <em>bên ngoài</em>, tạo khoảng cách giữa khối này với khối kế bên. Thường dùng <code>margins.top</code> để giãn cách các khối xếp dọc.</li>
+  </ul>
+  <p>Cả hai đặt được cho từng cạnh: <code>top</code>, <code>bottom</code>, <code>start</code> (trái), <code>end</code> (phải). Đơn vị mặc định là <strong>dp</strong>.</p>
+  <div class="callout tip"><div class="h">Nên dùng <code>start</code>/<code>end</code> thay vì <code>left</code>/<code>right</code></div>Vì với ngôn ngữ viết phải-sang-trái (như tiếng Ả Rập), <code>start</code>/<code>end</code> tự đảo chiều đúng.</div>
+
+  <h3>5.4 Căn lề — đừng nhầm 2 nhóm này</h3>
+  <table>
+    <thead><tr><th>Thuộc tính</th><th>Căn cái gì</th><th>Câu thần chú</th></tr></thead>
+    <tbody>
+      <tr><td><code>alignment_horizontal</code> / <code>alignment_vertical</code></td><td>Căn <strong>chính khối này</strong> trong ô của cha nó</td><td>"Tôi đứng đâu trong nhà bố mẹ?"</td></tr>
+      <tr><td><code>content_alignment_horizontal</code> / <code>content_alignment_vertical</code></td><td>Căn <strong>các con bên trong</strong> khối này</td><td>"Con cái tôi đứng đâu trong nhà tôi?"</td></tr>
+    </tbody>
+  </table>
+  <p>Giá trị thường dùng: <code>start</code>, <code>center</code>, <code>end</code> (ngang); <code>top</code>, <code>center</code>, <code>bottom</code> (dọc). Riêng <code>content_alignment_horizontal</code> còn có <code>space-between</code> — rất tiện để dàn đều 3 mục (Terms · huy hiệu · Privacy) ra hai mép mà không cần chèn khối trống.</p>
+
+  <h3>5.5 Bộ khung mẫu cho một màn hình paywall</h3>
+  <p>Đa số màn hình paywall/onboarding dùng bộ khung 4 phần để nút bấm luôn dính đáy còn ảnh tự nở:</p>
+  <figure>
+  <svg viewBox="0 0 560 360" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+    <rect x="170" y="10" width="220" height="340" rx="16" fill="#fff" stroke="#cbd0d8"/>
+    <!-- header -->
+    <rect x="182" y="22" width="196" height="34" rx="7" fill="#eaf1ff" stroke="#9cbcf5"/>
+    <text x="280" y="43" font-size="11" fill="#2563eb" text-anchor="middle">[0] Header — ✕ + Restore</text>
+    <!-- middle -->
+    <rect x="182" y="62" width="196" height="150" rx="7" fill="#f3ecff" stroke="#c4a7f0"/>
+    <text x="280" y="80" font-size="11" fill="#6d28d9" text-anchor="middle" font-weight="700">[1] Giữa (weight:1)</text>
+    <text x="280" y="96" font-size="10" fill="#7c3aed" text-anchor="middle">tiêu đề + ảnh</text>
+    <rect x="206" y="106" width="148" height="92" rx="6" fill="#a855f7"/>
+    <text x="280" y="156" font-size="10" fill="#fff" text-anchor="middle">ảnh weight:1 → tự nở ↕</text>
+    <!-- content -->
+    <rect x="182" y="218" width="196" height="64" rx="7" fill="#e7f7f0" stroke="#67c9a3"/>
+    <text x="280" y="236" font-size="11" fill="#0ea371" text-anchor="middle" font-weight="700">[2] Nội dung</text>
+    <text x="280" y="252" font-size="10" fill="#0ea371" text-anchor="middle">tính năng + thẻ gói</text>
+    <rect x="206" y="258" width="148" height="16" rx="4" fill="#b7ecd6"/>
+    <!-- cta -->
+    <rect x="182" y="288" width="196" height="50" rx="7" fill="#fdf2e2" stroke="#f5b86a"/>
+    <rect x="200" y="296" width="160" height="24" rx="8" fill="#7c3aed"/><text x="280" y="312" font-size="10" fill="#fff" text-anchor="middle">Start Free Trial →</text>
+    <text x="280" y="333" font-size="9" fill="#b45309" text-anchor="middle">[3] CTA + Footer (dính đáy)</text>
+    <!-- labels left -->
+    <text x="20" y="44" font-size="11" fill="#5b6675">wrap</text>
+    <text x="20" y="140" font-size="11" fill="#5b6675">nở</text>
+    <text x="20" y="252" font-size="11" fill="#5b6675">wrap</text>
+    <text x="20" y="316" font-size="11" fill="#5b6675">wrap</text>
+    <!-- tall device arrow -->
+    <line x1="420" y1="70" x2="420" y2="205" stroke="#a855f7" stroke-width="2" marker-end="url(#ah)" marker-start="url(#ah)"/>
+    <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#a855f7"/></marker></defs>
+    <text x="470" y="140" font-size="10" fill="#7c3aed" text-anchor="middle" transform="rotate(90 470 140)">chỗ thừa dồn vào ảnh</text>
+  </svg>
+  <figcaption>Bộ khung 4 phần: Header và CTA cố định ở trên/dưới, phần Giữa (cùng ảnh) mang <code>weight:1</code> nên tự nở lấp chỗ thừa trên màn cao.</figcaption>
+  </figure>
+  <p>Mẹo: phần giữa và ảnh cùng đặt <code>weight: 1</code> nên trên màn hình cao, ảnh nở ra lấp chỗ thừa thay vì để lại khoảng trống xấu; phần CTA để <code>wrap_content</code> nên luôn nằm sát đáy.</p>
+
+  <!-- 6 -->
+  <h2 id="styling">6. Styling — định dạng &amp; màu sắc <a class="anchor" href="#styling">#</a></h2>
+  <p>Sau khi bố cục đúng chỗ, đến lúc làm cho đẹp. Mọi cài đặt dưới đây nằm ở bảng thuộc tính bên phải khi bạn chọn một khối.</p>
+
+  <figure class="shot tall">
+    <img src="images/builder-03-bang-thuoc-tinh.jpg" alt="Bảng thuộc tính">
+    <figcaption>Ảnh thật: bảng thuộc tính khi chọn một khối — Width/Height, Alignment (X/Y), Alpha, Rotation, sơ đồ Margins &amp; Paddings lồng nhau, Background, Shadow.</figcaption>
+  </figure>
+
+  <h3>6.1 Nền — <code>background</code></h3>
+  <table>
+    <thead><tr><th>Loại nền</th><th>Mô tả</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Solid</strong> (màu đặc)</td><td>Một màu, ví dụ <code>#7C3AED</code>. Có thể thêm độ trong suốt bằng mã 8 ký tự <code>#AARRGGBB</code> (ví dụ <code>#1A7C3AED</code> = tím 10%).</td></tr>
+      <tr><td><strong>Gradient</strong> (chuyển màu)</td><td>Hai màu trở lên + góc nghiêng. 0° = trên→dưới, 90° = trái→phải.</td></tr>
+      <tr><td><strong>Image</strong> (ảnh nền)</td><td>Dùng một ảnh làm nền.</td></tr>
+    </tbody>
+  </table>
+  <p>Một khối có thể có <strong>nhiều lớp nền</strong> chồng lên nhau (lớp đầu mảng nằm dưới cùng).</p>
+  <div class="fig-row">
+    <figure>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="10" fill="#7c3aed"/></svg>
+      <figcaption>Solid · <code>#7C3AED</code></figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><rect x="20" y="18" width="160" height="74" rx="10" fill="url(#g1)"/></svg>
+      <figcaption>Gradient · 2 màu, góc 45°</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="10" fill="#1A7C3AED"/><text x="100" y="60" font-size="11" fill="#7c3aed" text-anchor="middle">tím 10%</text></svg>
+      <figcaption>Trong suốt · <code>#1A7C3AED</code></figcaption>
+    </figure>
+  </div>
+  <div class="fig-row">
+    <figure>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="4" fill="#fff" stroke="#7c3aed" stroke-width="2"/></svg>
+      <figcaption>corner_radius nhỏ · stroke tím 2dp</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="22" fill="#f3ecff" stroke="#c4a7f0"/></svg>
+      <figcaption>corner_radius lớn · bo tròn</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="22" y="22" width="160" height="74" rx="12" fill="#7c3aed" opacity="0.18"/><rect x="20" y="18" width="160" height="74" rx="12" fill="#fff" stroke="#e6e8ec"/><text x="100" y="60" font-size="11" fill="#5b6675" text-anchor="middle">has_shadow</text></svg>
+      <figcaption>Bóng đổ · <code>has_shadow</code></figcaption>
+    </figure>
+  </div>
+
+  <h3>6.2 Viền &amp; bo góc — <code>border</code></h3>
+  <ul>
+    <li><strong>Bo góc:</strong> <code>corner_radius</code> bo đều 4 góc; muốn bo từng góc khác nhau thì dùng <code>corners_radius</code>.</li>
+    <li><strong>Đường viền:</strong> <code>stroke</code> gồm màu và độ dày (ví dụ viền tím 1.5 dp cho thẻ gói đang chọn).</li>
+    <li><strong>Bóng đổ:</strong> bật <code>has_shadow</code> nếu cần.</li>
+  </ul>
+
+  <h3>6.3 Chữ — thuộc tính của Text</h3>
+  <table>
+    <thead><tr><th>Thuộc tính</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>text</code></td><td>Nội dung chữ.</td></tr>
+      <tr><td><code>font_size</code></td><td>Cỡ chữ (số).</td></tr>
+      <tr><td><code>font_weight</code></td><td>Độ đậm: <code>light</code>, <code>regular</code>, <code>medium</code>, <code>bold</code>.</td></tr>
+      <tr><td><code>text_color</code></td><td>Màu chữ, ví dụ <code>#FFFFFF</code>.</td></tr>
+      <tr><td><code>line_height</code></td><td>Chiều cao dòng (giãn dòng).</td></tr>
+      <tr><td><code>text_alignment_horizontal</code></td><td>Căn chữ: trái / giữa / phải.</td></tr>
+      <tr><td><code>max_lines</code></td><td>Giới hạn số dòng (ví dụ 1 để không xuống dòng).</td></tr>
+    </tbody>
+  </table>
+  <figure>
+  <svg viewBox="0 0 560 130" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+    <text x="20" y="40" font-size="22" font-weight="300" fill="#1f2329">Aa</text><text x="70" y="40" font-size="13" fill="#5b6675">light</text>
+    <text x="160" y="40" font-size="22" font-weight="400" fill="#1f2329">Aa</text><text x="210" y="40" font-size="13" fill="#5b6675">regular</text>
+    <text x="320" y="40" font-size="22" font-weight="500" fill="#1f2329">Aa</text><text x="370" y="40" font-size="13" fill="#5b6675">medium</text>
+    <text x="470" y="40" font-size="22" font-weight="700" fill="#1f2329">Aa</text><text x="510" y="40" font-size="13" fill="#5b6675">bold</text>
+    <text x="20" y="86" font-size="13" fill="#5b6675">Cỡ:</text>
+    <text x="60" y="90" font-size="12" fill="#1f2329">12</text>
+    <text x="110" y="92" font-size="16" fill="#1f2329">16</text>
+    <text x="170" y="96" font-size="22" font-weight="700" fill="#1f2329">22</text>
+    <text x="250" y="100" font-size="30" font-weight="700" fill="#7c3aed">30</text>
+  </svg>
+  <figcaption>Bốn mức độ đậm và một vài cỡ chữ.</figcaption>
+  </figure>
+
+  <div class="callout warn"><div class="h">Luôn đặt đơn vị chữ là <code>dp</code></div>Đặt <code>font_size_unit: dp</code>. Nếu để mặc định <code>sp</code>, cỡ chữ sẽ phóng to/thu nhỏ theo cài đặt phông của điện thoại người dùng và làm vỡ thiết kế.</div>
+
+  <h3>6.4 Ảnh — thuộc tính của Image</h3>
+  <ul>
+    <li><code>image_url</code> — đường link ảnh. Nên dùng link cố định (ví dụ trên S3), <strong>không dùng link Figma</strong> vì link đó hết hạn sau 7 ngày.</li>
+    <li><code>scale</code> — cách ảnh lấp khung: <code>fill</code> (lấp đầy, cắt bớt — mặc định), <code>fit</code> (đặt vừa cả ảnh, chừa khoảng trống), <code>no_scale</code>, <code>stretch</code>.</li>
+    <li><code>content_alignment_*</code> — căn ảnh trong khung khi ảnh nhỏ hơn khung.</li>
+  </ul>
+
+  <!-- 7 -->
+  <h2 id="variable">7. Variable — biến &amp; đa ngôn ngữ <a class="anchor" href="#variable">#</a></h2>
+  <p>Biến giúp một chỗ thay đổi mà nhiều nơi tự cập nhật theo. Khai báo ở tab <strong>Variable</strong>, rồi gọi ra trong nội dung bằng cú pháp <code>@{tên_biến}</code>.</p>
+
+  <figure class="shot tall">
+    <img src="images/builder-05-variables.jpg" alt="Tab Variables">
+    <figcaption>Ảnh thật: tab Variables — các biến chuỗi (<code>url_base</code>, <code>url_icon_*</code> trỏ tới link ảnh) và các từ điển <code>i18n_*</code> chứa bản dịch theo ngôn ngữ (ví dụ khoá <code>"ar"</code> cho tiếng Ả Rập).</figcaption>
+  </figure>
+
+  <h3>Các loại biến hay gặp</h3>
+  <ul>
+    <li><strong>Chuỗi (string):</strong> ví dụ <code>language_code</code> = "vi", <code>url_image_hero</code> = link ảnh.</li>
+    <li><strong>Từ điển (dict):</strong> chứa nhiều giá trị theo khoá — dùng cho đa ngôn ngữ và bảng màu.</li>
+  </ul>
+
+  <h3>Đa ngôn ngữ: mỗi câu chữ là một dict</h3>
+  <p>Thay vì gõ chữ thẳng vào khối Text, hãy buộc nó vào một từ điển dịch. Như vậy sau này thêm tiếng mới chỉ cần thêm dòng trong biến, không phải sửa từng khối.</p>
+  <pre><code>// Khai báo biến i18n_title:
+{ "en": "Unlock Premium", "vi": "Mở khoá Premium" }
+
+// Trong khối Text:
+@{getOptStringFromDict('Unlock Premium', i18n_title, language_code)}</code></pre>
+  <div class="callout danger"><div class="h">Không gõ chữ cứng</div>Kể cả nhãn ngắn như "Restore", "Continue", "BEST OFFER" cũng nên buộc vào một dict <code>i18n_…</code>. Đây là việc nhỏ nhưng giúp dịch và A/B test về sau cực kỳ dễ.</div>
+
+  <h3>Bảng màu — <code>local_palette</code></h3>
+  <p>Theo quy ước nhóm, luôn khai báo biến <code>local_palette</code> chứa các màu nền sáng/tối, để các màn dùng chung và dễ đổi theme:</p>
+  <pre><code>{
+  "bg_primary":   { "light": "#ffffff", "dark": "#000000" },
+  "bg_secondary": { "light": "#eeeeee", "dark": "#000000" }
+}</code></pre>
+
+  <!-- 8 -->
+  <h2 id="products">8. Products — gói mua &amp; giá thật <a class="anchor" href="#products">#</a></h2>
+  <p>Ở tab <strong>Products</strong>, bạn khai báo các gói cần bán. Hệ thống sẽ tự lấy <strong>giá đúng theo từng quốc gia</strong> và đổ vào màn hình — bạn không gõ giá bằng tay.</p>
+  <table>
+    <thead><tr><th>Trường</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>Tên biến để gọi giá, ví dụ <code>@{weekly_trial}</code> → "$2.99".</td></tr>
+      <tr><td><code>product_id</code></td><td>Mã sản phẩm trên store (App Store / Google Play).</td></tr>
+      <tr><td><code>variable_type</code></td><td><code>subscribe</code> cho gói thuê bao, <code>inapp</code> cho mua một lần.</td></tr>
+      <tr><td><code>Type</code></td><td>Kiểu giá trị trả về, thường là <code>string</code> (chuỗi giá đã định dạng).</td></tr>
+      <tr><td><code>Divisor</code> / <code>Multiplier</code></td><td>Tuỳ chọn — để tính <em>giá theo đơn vị</em>. Ví dụ chia 365 ra giá/ngày, hoặc nhân 12 ra giá/năm.</td></tr>
+      <tr><td><code>isIntroductoryOffer</code></td><td>Đánh dấu gói có ưu đãi dùng thử/giá giới thiệu.</td></tr>
+      <tr><td><code>Preview price</code></td><td>Giá giả lập chỉ để xem trước trong editor (EDITOR ONLY) — không ảnh hưởng giá thật.</td></tr>
+    </tbody>
+  </table>
+  <p>Mỗi màn hình cũng có <code>screen_id</code>, <code>label</code> và <code>screen_type</code> (ví dụ <em>paywall / onboarding</em>) khai báo ở đầu tab Products.</p>
+
+  <figure class="shot tall">
+    <img src="images/builder-08-products.jpg" alt="Tab Products">
+    <figcaption>Ảnh thật: tab Products — gói <code>weekly_trial</code> gắn Product ID <code>sub_weekly_699</code>, kiểu <code>subscribe</code>/<code>string</code>, kèm Divisor, Multiplier, isIntroductoryOffer và Preview price.</figcaption>
+  </figure>
+
+  <p>Trong khối Text, gọi giá trực tiếp:</p>
+  <pre><code>@{weekly_notrial}/week        →  "$7.99/week"
+then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
+  <div class="callout note"><div class="h">Liên kết với gói đang chọn</div>Có một biến <code>selected_plan</code> giữ gói người dùng đang chọn. Nút mua sẽ dùng nó để biết mua gói nào — xem phần State và Actions.</div>
+
+  <!-- 9 -->
+  <h2 id="state">9. State — đổi giao diện theo trạng thái <a class="anchor" href="#state">#</a></h2>
+  <p>Khối <strong>State</strong> chứa nhiều "phiên bản hình" và chuyển giữa chúng lúc chạy. Ứng dụng phổ biến nhất: thẻ gói <strong>được chọn</strong> vs <strong>không chọn</strong>.</p>
+  <ul>
+    <li>Mỗi State có nhiều <strong>trạng thái</strong> (states), ví dụ <code>selected</code> và <code>unselected</code>.</li>
+    <li><code>default_state_id</code> = trạng thái hiện lúc mở màn hình.</li>
+  </ul>
+  <div class="callout warn"><div class="h">Có từ 2 gói trở lên?</div>Mỗi thẻ gói phải có <strong>đủ cả hai</strong> trạng thái <code>selected</code> và <code>unselected</code> — không chỉ riêng gói mặc định. Nếu thiếu, khi người dùng đổi sang gói khác, gói cũ vẫn "kẹt" ở kiểu được chọn.</div>
+
+  <h3>Bấm cả thẻ, không bấm cái gạt nhỏ</h3>
+  <p>Khi thẻ gói có nút gạt (toggle) bên trong, hãy gắn hành động <strong>vào cả thẻ</strong>, còn cái gạt chỉ là hình minh hoạ (không có hành động riêng). Vùng bấm to giúp người dùng dễ chạm trúng hơn nhiều.</p>
+
+  <h3>Đồng bộ khi đổi gói — <code>variable_triggers</code></h3>
+  <p>Đây là phần "tự động": khi <code>selected_plan</code> đổi, các thẻ tự cập nhật trạng thái. Mỗi gói có một quy tắc: "nếu gói này được chọn → đặt thẻ này = selected, các thẻ khác = unselected".</p>
+  <pre><code>Khi selected_plan == 'weekly_trial':
+   • thẻ trial   → selected
+   • thẻ weekly  → unselected</code></pre>
+
+  <!-- 10 -->
+  <h2 id="timers">10. Timers — hẹn giờ <a class="anchor" href="#timers">#</a></h2>
+  <p>Tab <strong>Timers</strong> dùng cho những hiệu ứng theo thời gian mà Figma không thể hiện được:</p>
+  <ul>
+    <li><strong>Hiện trễ:</strong> ví dụ 3 giây sau khi mở mới hiện nút đóng (✕).</li>
+    <li><strong>Đếm ngược:</strong> "Ưu đãi kết thúc sau 04:59".</li>
+    <li><strong>Tự chuyển:</strong> banner/slide tự xoay vòng.</li>
+  </ul>
+  <p>Timer thường được "khởi động" khi màn hình hiện ra (qua <code>visibility_actions</code> ở Root), rồi dùng để bật/ẩn hoặc cập nhật một khối.</p>
+
+  <!-- 11 -->
+  <h2 id="actions">11. Actions — hành động khi bấm <a class="anchor" href="#actions">#</a></h2>
+  <p>Gắn hành động cho khối ở mục <code>action</code> trong bảng thuộc tính. Các hành động chuẩn của paywall dùng cú pháp <code>div-action://paywall/…</code> để app xử lý tập trung:</p>
+  <table>
+    <thead><tr><th>Khối</th><th>Hành động</th></tr></thead>
+    <tbody>
+      <tr><td>Nút đóng ✕</td><td><code>div-action://paywall/close</code></td></tr>
+      <tr><td>Nút khôi phục</td><td><code>div-action://paywall/restore</code></td></tr>
+      <tr><td>Nút mua / Continue</td><td><code>div-action://paywall/purchase?variable_id=@{selected_plan}</code></td></tr>
+      <tr><td>Mở Điều khoản</td><td><code>div-action://paywall/open_terms?term_url=…</code></td></tr>
+      <tr><td>Mở Bảo mật</td><td><code>div-action://paywall/open_privacy?privacy_url=…</code></td></tr>
+      <tr><td>Chạm thẻ gói</td><td><code>div-action://set_variable?name=selected_plan&amp;value=&lt;mã_gói&gt;</code></td></tr>
+      <tr><td>Đổi trạng thái</td><td><code>div-action://set_state?state_id=&lt;đường/dẫn/state&gt;</code></td></tr>
+    </tbody>
+  </table>
+
+  <!-- 12 -->
+  <h2 id="quy-uoc">12. Quy ước &amp; mẹo vàng <a class="anchor" href="#quy-uoc">#</a></h2>
+  <div class="callout tip"><div class="h">Thang khoảng cách 4dp</div>Mọi padding/margin/khoảng hở nên chọn trong dãy: <strong>2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64</strong>. Đừng dùng số lẻ như 11, 13, 17. Cả màn hình nên chỉ dùng 3–5 con số khoảng cách → trông gọn gàng, nhất quán.</div>
+  <ul>
+    <li><strong>Luôn đặt</strong> <code>width</code> và <code>height</code> cho Text và Image (mặc định <code>wrap_content</code>).</li>
+    <li><strong>Luôn đặt</strong> <code>font_size_unit: dp</code> cho chữ.</li>
+    <li><strong>Không gõ chữ cứng</strong> — buộc mọi chữ vào dict <code>i18n_…</code>.</li>
+    <li><strong>Không gõ giá cứng</strong> — gọi từ Products qua <code>@{tên_gói}</code>.</li>
+    <li><strong>Không dùng link ảnh Figma</strong> (hết hạn) — dùng link cố định.</li>
+    <li><strong>Dùng <code>overlap</code></strong> khi có nhãn đè lên thẻ (BEST OFFER), nếu không nhãn sẽ rớt ra ngoài.</li>
+    <li><strong>Đặt tên khối rõ ràng</strong> để cây Components dễ đọc.</li>
+    <li><strong>Đưa lỗi (✕) về 0</strong> trước khi lưu.</li>
+  </ul>
+
+  <!-- 13 -->
+  <h2 id="quy-trinh">13. Quy trình dựng một màn hình <a class="anchor" href="#quy-trinh">#</a></h2>
+  <ol class="steps">
+    <li><strong>Dựng khung trước.</strong> Tạo Root → Container dọc → 4 phần (Header / Giữa / Nội dung / CTA). Chưa cần đẹp, chỉ cần đúng cấu trúc.</li>
+    <li><strong>Đổ nội dung.</strong> Thêm Text, Image, thẻ gói vào đúng phần. Kéo-thả để sắp thứ tự.</li>
+    <li><strong>Chỉnh layout.</strong> Đặt orientation, width/height, padding/margin, căn lề cho từng khối.</li>
+    <li><strong>Định dạng.</strong> Màu nền, viền, bo góc, cỡ/đậm/màu chữ, scale ảnh.</li>
+    <li><strong>Nối dữ liệu động.</strong> Khai báo biến i18n, gói ở Products, trạng thái chọn gói, hành động cho nút.</li>
+    <li><strong>Kiểm tra.</strong> Đổi kích thước thiết bị (nhỏ ↔ lớn), bật chế độ sáng/tối, đưa lỗi về 0.</li>
+    <li><strong>Lưu &amp; xuất bản.</strong> Bấm Save.</li>
+  </ol>
+
+  <h3>Bảng kiểm trước khi lưu</h3>
+  <ul>
+    <li>☐ Mọi Text/Image đã có <code>width</code> &amp; <code>height</code>?</li>
+    <li>☐ Chữ dùng <code>font_size_unit: dp</code>, buộc vào <code>i18n_…</code>?</li>
+    <li>☐ Giá lấy từ Products, nút mua trỏ tới <code>@{selected_plan}</code>?</li>
+    <li>☐ Có ≥2 gói thì mỗi thẻ đủ cả <code>selected</code> &amp; <code>unselected</code>?</li>
+    <li>☐ Nhãn đè (BEST OFFER) nằm trong Container <code>overlap</code>?</li>
+    <li>☐ Chạy đẹp trên màn nhỏ &amp; lớn, nền sáng &amp; tối?</li>
+    <li>☐ Số lỗi = 0?</li>
+  </ul>
+
+  <!-- 14 -->
+  <h2 id="luu">14. Lưu, xem trước &amp; xuất bản <a class="anchor" href="#luu">#</a></h2>
+  <ul>
+    <li><strong>Xem trước:</strong> dùng ô kích thước thiết bị và nút sáng/tối ở thanh công cụ để soát trên nhiều ngữ cảnh.</li>
+    <li><strong>Nhập từ Figma:</strong> nút <strong>Figma</strong> giúp đưa thiết kế vào để dựng nhanh. Mẹo: trong Figma, đặt tên layer ảnh/icon bắt đầu bằng <code>xImage</code>, <code>xIcon</code>, <code>xLottie</code>, <code>xGif</code>, <code>xVideo</code> để chúng được hiểu là tài nguyên đơn (một file ảnh), không bị tách nhỏ.</li>
+    <li><strong>Lưu:</strong> bấm <strong>Save</strong>. Vì giao diện nạp từ server, thay đổi sẽ tới người dùng mà không cần cập nhật app.</li>
+  </ul>
+  <div class="callout danger"><div class="h">Trước khi Save</div>Kiểm tra ô lỗi/cảnh báo trên thanh công cụ. <strong>Lỗi (✕ đỏ) phải bằng 0.</strong> Cảnh báo (⚠ vàng) nên rà soát nhưng không chặn lưu.</div>
+
+  <!-- glossary -->
+  <h2 id="tu-dien">Từ điển thuật ngữ nhanh <a class="anchor" href="#tu-dien">#</a></h2>
+  <table>
+    <thead><tr><th>Thuật ngữ</th><th>Nghĩa đơn giản</th></tr></thead>
+    <tbody>
+      <tr><td>Container</td><td>Cái hộp chứa các khối khác.</td></tr>
+      <tr><td>orientation</td><td>Hướng xếp con: dọc / ngang / chồng.</td></tr>
+      <tr><td>wrap_content</td><td>To vừa bằng nội dung.</td></tr>
+      <tr><td>match_parent</td><td>To bằng khung cha.</td></tr>
+      <tr><td>weight</td><td>Tỉ lệ chia chỗ thừa.</td></tr>
+      <tr><td>padding</td><td>Đệm bên trong.</td></tr>
+      <tr><td>margin</td><td>Lề bên ngoài.</td></tr>
+      <tr><td>alignment</td><td>Căn chính khối trong cha.</td></tr>
+      <tr><td>content_alignment</td><td>Căn các con bên trong khối.</td></tr>
+      <tr><td>State</td><td>Khối đổi hình theo trạng thái.</td></tr>
+      <tr><td>Variable / @{…}</td><td>Biến và cách gọi biến.</td></tr>
+      <tr><td>i18n dict</td><td>Từ điển dịch đa ngôn ngữ.</td></tr>
+      <tr><td>Action</td><td>Hành động khi bấm.</td></tr>
+      <tr><td>dp</td><td>Đơn vị đo không phụ thuộc mật độ màn hình.</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Tài liệu nội bộ hướng dẫn dựng UI với DivKit Builder · biên soạn cho người không code.<br>
+    Tham khảo: DivKit official docs (divkit.tech) · Superwall Paywall Editor docs · bộ tài liệu phần tử DivKit nội bộ.
+  </footer>
+</main>
+</div>
+
+<script>
+  // mobile sidebar
+  var side = document.getElementById('side');
+  document.getElementById('menuBtn').addEventListener('click', function(){ side.classList.toggle('open'); });
+  side.addEventListener('click', function(e){ if(e.target.tagName==='A') side.classList.remove('open'); });
+
+  // active link on scroll
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.side a'));
+  var map = {};
+  links.forEach(function(a){ var id=a.getAttribute('href').slice(1); var el=document.getElementById(id); if(el) map[id]=a; });
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        links.forEach(function(a){a.classList.remove('active');});
+        var a = map[en.target.id]; if(a) a.classList.add('active');
+      }
+    });
+  }, {rootMargin:'-10% 0px -75% 0px', threshold:0});
+  Object.keys(map).forEach(function(id){ obs.observe(document.getElementById(id)); });
+</script>
+</body>
+</html>
