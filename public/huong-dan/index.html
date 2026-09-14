@@ -311,7 +311,7 @@
       <tr><td><strong>Variable</strong></td><td>Khai báo và quản lý <em>biến</em> (chữ đa ngôn ngữ, màu, link ảnh...). Xem phần 7.</td></tr>
       <tr><td><strong>Timers</strong></td><td>Hẹn giờ: ví dụ 3 giây mới hiện nút đóng. Xem phần 10.</td></tr>
       <tr><td><strong>Products</strong></td><td>Khai báo các gói mua (IAP) để lấy giá thật. Xem phần 8.</td></tr>
-      <tr><td><strong>Localization</strong></td><td>Bảng dịch: mỗi dòng là một câu chữ, mỗi cột là một ngôn ngữ. Chỉ hiện những biến <code>dict</code> bạn đã đánh dấu là i18n. Xem phần 7.</td></tr>
+      <tr><td><strong>Localization</strong></td><td>Bảng dịch: mỗi dòng là một câu chữ. Cũng là chỗ <strong>đổi ngôn ngữ xem trước</strong> (<code>language_code</code>) và dịch máy hàng loạt. Chỉ hiện những biến <code>dict</code> đã đánh dấu là i18n. Xem phần 7.</td></tr>
     </tbody>
   </table>
 
@@ -758,7 +758,7 @@ default_state_id: selected</code></pre>
 
   <figure class="shot tall">
     <img src="images/builder-05-variables.jpg" alt="Tab Variables">
-    <figcaption>Ảnh thật: tab Variables — các biến chuỗi (<code>url_base</code>, <code>url_icon_*</code> trỏ tới link ảnh) và các từ điển <code>locale_i18n_*</code> chứa bản dịch theo ngôn ngữ (ví dụ khoá <code>"ar"</code> cho tiếng Ả Rập).</figcaption>
+    <figcaption>Ảnh thật: tab Variables — biến chuỗi (<code>url_icon_close</code>, <code>url_video_*</code> trỏ tới link ảnh/video) và <code>selected_plan</code> giữ gói đang chọn. Từ điển dịch <strong>không</strong> hiện ở đây — xem ngay bên dưới.</figcaption>
   </figure>
 
   <h3>Các loại biến hay gặp</h3>
@@ -775,6 +775,18 @@ default_state_id: selected</code></pre>
 // Trong khối Text:
 @{getOptStringFromDict('Unlock Premium', locale_i18n_title, language_code)}</code></pre>
   <div class="callout danger"><div class="h">Không gõ chữ cứng</div>Kể cả nhãn ngắn như "Restore", "Continue", "BEST OFFER" cũng nên buộc vào một dict <code>locale_i18n_…</code>. Đây là việc nhỏ nhưng giúp dịch và A/B test về sau cực kỳ dễ.</div>
+  <h3>Tab Localization — chỗ thật sự sửa bản dịch</h3>
+  <p>Một dict đã được đánh dấu là bản dịch sẽ <strong>biến mất khỏi tab Variable</strong> và chuyển sang tab <strong>Localization</strong>. Đừng tưởng là mất: đó là nơi sửa chúng, dưới dạng bảng dễ đọc hơn nhiều so với gõ JSON.</p>
+  <figure>
+    <img src="images/builder-09-localization.jpg" alt="Tab Localization: chọn language_code, danh sách khoá dịch và nút Translate all missing">
+    <figcaption>Ảnh thật: tab Localization — mỗi dòng là một câu chữ (<code>locale_i18n_terms</code> → "Terms of Use"), bấm ✎ để sửa từng ngôn ngữ.</figcaption>
+  </figure>
+  <ul>
+    <li><strong><code>language_code</code> (EDITOR ONLY)</strong> — bấm một mã ngôn ngữ là <strong>khung xem trước đổi ngay sang ngôn ngữ đó</strong>. Đây là cách soát bản dịch mà không phải sửa gì. Nhãn "EDITOR ONLY" nghĩa là nó chỉ đổi thứ bạn đang nhìn, không đụng vào layout.</li>
+    <li><strong>Translate all missing</strong> — dịch máy những ô còn trống. Tiện để lấp nhanh, nhưng <strong>vẫn phải người rà</strong>: máy dịch hay sai đúng những chỗ ngắn và quan trọng như nút bấm.</li>
+    <li><strong>Single locale mode</strong> — chỉ xuất một ngôn ngữ. Chỉ bật khi màn đó thật sự dùng một thứ tiếng.</li>
+  </ul>
+
   <div class="callout note"><div class="h">Đặt tên: dùng <code>locale_i18n_…</code></div>
     Layout cũ trong bucket có cả <code>i18n_…</code> và <code>locale_…</code>, nhưng <code>locale_i18n_…</code> là quy ước đang chiếm đa số (1864 trên 2811 biến dict). Gặp tên cũ thì cứ để yên — đổi tên biến là phải sửa mọi chỗ gọi nó. Chỉ cần biến MỚI đặt theo quy ước này.
   </div>
@@ -794,8 +806,8 @@ default_state_id: selected</code></pre>
     <tbody>
       <tr><td><code>id</code></td><td>Tên biến để gọi giá, ví dụ <code>@{weekly_trial}</code> → "$2.99".</td></tr>
       <tr><td><code>product_id</code></td><td>Mã sản phẩm trên store (App Store / Google Play).</td></tr>
-      <tr><td><code>variable_type</code></td><td><code>subscribe</code> cho gói thuê bao, <code>inapp</code> cho mua một lần.</td></tr>
-      <tr><td><code>Type</code></td><td>Kiểu giá trị trả về, thường là <code>string</code> (chuỗi giá đã định dạng).</td></tr>
+      <tr><td><code>variable_type</code></td><td><code>subscribe</code> (thuê bao), <code>consumable</code> (mua rồi dùng hết), <code>lifetime</code> (mua một lần, dùng mãi).</td></tr>
+      <tr><td><code>Type</code></td><td>Kiểu giá trị trả về: <code>string</code> (chuỗi giá đã định dạng — hay dùng nhất), <code>integer</code>, <code>number</code>, <code>boolean</code>, hoặc để trống.</td></tr>
       <tr><td><code>Divisor</code> / <code>Multiplier</code></td><td>Tuỳ chọn — để tính <em>giá theo đơn vị</em>. Ví dụ chia 365 ra giá/ngày, hoặc nhân 12 ra giá/năm.</td></tr>
       <tr><td><code>isIntroductoryOffer</code></td><td>Đánh dấu gói có ưu đãi dùng thử/giá giới thiệu.</td></tr>
       <tr><td><code>Preview price</code></td><td>Giá giả lập chỉ để xem trước trong editor (EDITOR ONLY) — không ảnh hưởng giá thật.</td></tr>
@@ -805,7 +817,7 @@ default_state_id: selected</code></pre>
 
   <figure class="shot tall">
     <img src="images/builder-08-products.jpg" alt="Tab Products">
-    <figcaption>Ảnh thật: tab Products — gói <code>weekly_trial</code> gắn Product ID <code>sub_weekly_699</code>, kiểu <code>subscribe</code>/<code>string</code>, kèm Divisor, Multiplier, isIntroductoryOffer và Preview price.</figcaption>
+    <figcaption>Ảnh thật: tab Products — <code>screen_id</code>/<code>label</code>/<code>screen_type</code> ở trên, rồi từng gói trong mục IAP VARIABLES: Variable ID, Product ID, Variable type, Type, Divisor, Multiplier, isIntroductoryOffer và Preview price (EDITOR ONLY).</figcaption>
   </figure>
 
   <p>Trong khối Text, gọi giá trực tiếp:</p>
@@ -949,7 +961,7 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
   <ul>
     <li><strong>Nhiều kích thước:</strong> đổi ô kích thước thiết bị trên thanh công cụ. Nhớ thử cả <code>375x667</code> — đó là màn thấp nhất, chỗ nút CTA bị đẩy khỏi mép dưới trước tiên.</li>
     <li><strong>Sáng và tối:</strong> bật nút ☀/🌙, vì màu nền lấy từ bảng màu theo chủ đề.</li>
-    <li><strong>Ngôn ngữ:</strong> khung xem trước <strong>luôn dựng theo tiếng Anh</strong> — công cụ chưa có chỗ đổi ngôn ngữ xem trước. Mà câu tiếng Đức thường dài gấp rưỡi tiếng Anh và là thứ hay làm vỡ bố cục nhất, nên hãy chừa chỗ cho chữ dài: đừng đặt <code>width</code> cố định cho Text, và soát lại bản dịch trên máy thật.</li>
+    <li><strong>Nhiều ngôn ngữ:</strong> mở tab <strong>Localization</strong> rồi bấm một mã ngôn ngữ ở dòng <code>language_code</code> — khung xem trước đổi ngay. Nhớ thử một thứ tiếng dài: câu tiếng Đức thường dài gấp rưỡi tiếng Anh và là thứ hay làm vỡ bố cục nhất. Đừng đặt <code>width</code> cố định cho Text.</li>
     <li><strong>Hướng viết:</strong> nếu có tiếng Ả Rập, bật <strong>RTL</strong> trong ô kích thước để xem bố cục lật chiều.</li>
     <li><strong>Bấm thử:</strong> ở màn Preview có nút <span class="pill">Preview</span> mở cửa sổ dùng thử như máy thật. Mỗi lần bạn bấm vào layout, action sẽ hiện ra trong nhật ký bên cạnh — <strong>bấm nút Mua mà nhật ký trống nghĩa là nút đó chưa gắn action</strong>.</li>
   </ul>

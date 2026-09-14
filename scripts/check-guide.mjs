@@ -132,7 +132,11 @@ const html = readFileSync(FILE, 'utf-8');
             'label', 'screen_id', 'screen_type', 'product_id', 'variable_type', 'language_code',
             'local_palette', 'selected_plan', 'weekly_trial', 'weekly_notrial', 'sub_weekly_699',
             'url_base', 'url_image_hero', 'divisor', 'multiplier', 'spin_wheel', 'view_all_plans',
-            'reminder_on', 'reminder_off', 'set_current_item', 'set_next_item']);
+            'reminder_on', 'reminder_off', 'set_current_item', 'set_next_item',
+            // Thấy tận mắt trong app khi chụp ảnh tài liệu: hai cái đầu là biến
+            // của layout ikame-product-heartrate-android/premium_intro, cái cuối
+            // là một lựa chọn trong ô "Variable type" của tab Products.
+            'url_icon_close', 'locale_i18n_terms', 'consumable']);
         const codes = new Set([...html.matchAll(/<code>([^<]+)<\/code>/g)]
             .map((m) => m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'))
             .filter((c) => /^[a-z][a-z0-9_]*$/.test(c)));
