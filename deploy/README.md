@@ -319,7 +319,9 @@ nút Localize trả tiếng thật chứ không phải `[vi] text` (MT đúng).
 |---|---|
 | Login xoay vòng vô tận, log sạch trơn | DNS record để **DNS only** (xám) → không HTTPS → cookie `secure` bị vứt |
 | `exec format error` khi start container | build quên `--platform linux/amd64` |
-| Nút Localize trả `[vi] text` | thiếu `MT_PROVIDER=google` → rơi về stub, **không** báo lỗi |
+| Nút Localize trả 503 | thiếu `GEMINI_API_KEY` (log boot có dòng `[mt]`) |
+| Nút Localize trả `[vi] text` | đang để `MT_PROVIDER=stub` |
+| Nhãn một từ dịch sai nghĩa (`Play` → `Phát`) | thiếu `MT_CONTEXT` → model không biết đây là app game |
 | Lưu layout mất `variables`/`screen_id` | build thiếu `--build-arg VITE_SAVE_FORMAT=wrapper` (mặc định code là `plain`) |
 | Đổi `VITE_CDN_BASE` trong `.env` không ăn | `VITE_*` là build-time, phải build lại image |
 | `docker pull` 403 khi deploy | policy ECR của creds host chưa liệt kê repo `ik-nocode-editor` (xem 0.4) |
