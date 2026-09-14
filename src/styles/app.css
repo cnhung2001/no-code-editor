@@ -251,8 +251,11 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .draft-flag { color: var(--amber, #8a5300); font-size: 11px; font-weight: 600; }
 .meta-warn { color: #8a5300; }
 .push-err { color: #b3261e; font-size: 13px; }
+/* pre-line: cảnh báo có xuống dòng để tách lý do khỏi việc phải làm — dồn một
+   cục thì đúng cái câu cần đọc lại chìm vào giữa đoạn. */
 .push-warn { color: #8a5300; background: #fff4e0; border: 1px solid #f0d0a0;
-    border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.45; }
+    border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.45;
+    white-space: pre-line; }
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 11px; font-size: 13px; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 36px rgba(0, 0, 0, .3); z-index: 60; }

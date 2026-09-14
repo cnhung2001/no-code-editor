@@ -52,6 +52,12 @@ export interface PublishResult {
      * invalidate, hoặc server không cấu hình CDN_PURGE_URL.
      */
     cachePurged: boolean | null;
+    /**
+     * Vì sao purge hỏng, khi `cachePurged === false`. Có để người bấm Publish
+     * biết phải làm gì tiếp: hết giờ chờ thì kiểm tra lại rồi mới xoá tay, còn
+     * 403/504 thì phải gọi hạ tầng.
+     */
+    cachePurgeError?: string;
 }
 
 // Adapter S3 — frontend gọi qua interface này (impl thật hoặc mock)

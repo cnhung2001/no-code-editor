@@ -39,7 +39,11 @@ export function PushModal({ target, onClose, onDone }: Props) {
                 meta: target.meta
             });
             if (res.cachePurged === false) {
-                setWarn(`Đã publish ${res.version} lên S3, NHƯNG xoá cache CDN hỏng — app có thể còn ăn bản cũ. Xoá cache tay rồi hãy báo QC.`);
+                setWarn(
+                    `Đã publish ${res.version} lên S3, NHƯNG xoá cache CDN hỏng — app có thể còn ăn bản cũ.`
+                    + (res.cachePurgeError ? `\n\nLý do: ${res.cachePurgeError}` : '')
+                    + '\n\nXử lý xong hãy báo QC.'
+                );
                 setBusy(false);
                 return;
             }
@@ -106,7 +110,7 @@ export function PushModal({ target, onClose, onDone }: Props) {
                         <>
                             <button className="btn ghost sm" onClick={onClose}>Huỷ</button>
                             <button className="btn primary sm" disabled={busy} onClick={publish}>
-                                {Icon.upload} {busy ? 'Đang publish…' : 'Publish'}
+                                {Icon.upload} {busy ? 'Đang publish & xoá cache…' : 'Publish'}
                             </button>
                         </>
                     )}

@@ -56,7 +56,13 @@ const {
     // Nó xoá theo DIỆN RỘNG, không nhận key — nên chỉ gọi khi thật sự ghi đè một
     // layout đã có, xem §publish. Để trống = tắt.
     CDN_PURGE_URL = 'https://ocj5tukx8f.execute-api.ap-southeast-1.amazonaws.com/v1/delete-cache-cloudfront-cloudflare',
-    CDN_PURGE_TIMEOUT_MS = '15000',
+    // 35s, không phải 15s. Endpoint này ĐỒNG BỘ: nó chờ CloudFront invalidation
+    // chạy tới trạng thái Completed rồi mới trả lời, đo thực tế ~25s. Để 15s là
+    // tự abort giữa chừng rồi báo "xoá cache hỏng" cho một lệnh đang chạy bình
+    // thường — mà bỏ request thì Lambda phía kia VẪN chạy tiếp, nên cache thật
+    // ra đã sạch. Đặt trên trần ~29s của API Gateway để lỗi ta thấy là lỗi thật
+    // của nó (504), không phải cái đồng hồ của mình.
+    CDN_PURGE_TIMEOUT_MS = '35000',
     USE_S3_VERSIONING = 'true',
     // Sau khi gộp về một origin (§A), browser không còn gọi cross-origin nên
     // CORS mặc định TẮT. Chỉ bật khi thực sự cần client khác origin gọi vào —
@@ -80,22 +86,35 @@ const s3 = new S3Client({ region: AWS_REGION });
 const cf = CLOUDFRONT_DISTRIBUTION_ID ? new CloudFrontClient({ region: AWS_REGION }) : null;
 
 /**
- * Gọi endpoint purge cache CDN. Trả true/false chứ KHÔNG ném: file đã nằm trên
- * S3 rồi, để purge hỏng đánh đổ cả publish thì người dùng push lại lần nữa chỉ
- * đẻ thêm một version rác mà cache vẫn bẩn. Trả về để client còn hiện cảnh báo.
+ * Gọi endpoint purge cache CDN. KHÔNG ném: file đã nằm trên S3 rồi, để purge
+ * hỏng đánh đổ cả publish thì người dùng push lại lần nữa chỉ đẻ thêm một
+ * version rác mà cache vẫn bẩn.
+ *
+ * Trả về cả LÝ DO, không chỉ true/false. "Xoá cache CDN hỏng" một mình không
+ * hành động được: hết giờ, 403, hay 504 là ba việc khác nhau — cái đầu thì chờ
+ * thêm là xong, cái sau phải gọi hạ tầng. Trước đây lý do chỉ nằm trong log
+ * server, mà người bấm Publish thì không đọc log server.
  */
 async function purgeCdnCache() {
+    const timeoutMs = Number(CDN_PURGE_TIMEOUT_MS) || 35000;
     try {
-        const r = await fetch(CDN_PURGE_URL, {
-            signal: AbortSignal.timeout(Number(CDN_PURGE_TIMEOUT_MS) || 15000)
-        });
+        const r = await fetch(CDN_PURGE_URL, { signal: AbortSignal.timeout(timeoutMs) });
         if (!r.ok) {
-            throw new Error(`${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+            const body = (await r.text().catch(() => '')).slice(0, 200);
+            return { ok: false, reason: `endpoint purge trả ${r.status}${body ? ` — ${body}` : ''}` };
         }
-        return true;
+        return { ok: true };
     } catch (e) {
-        console.error('[cdn-purge]', String(e.message || e));
-        return false;
+        // Ta bỏ cuộc trước, không phải nó từ chối: huỷ request không dừng được
+        // việc đã chạy bên kia, nên cache RẤT CÓ THỂ vẫn được xoá.
+        if (e.name === 'TimeoutError') {
+            return {
+                ok: false,
+                reason: `endpoint purge không trả lời trong ${Math.round(timeoutMs / 1000)}s `
+                    + '— lệnh xoá có thể vẫn đang chạy, kiểm tra lại trước khi xoá tay'
+            };
+        }
+        return { ok: false, reason: `không gọi được endpoint purge: ${String(e.message || e)}` };
     }
 }
 
@@ -672,16 +691,23 @@ app.post('/api/publish', async (req, res) => {
         //    xoá, mà endpoint này purge diện rộng — gọi thừa là bắt mọi layout khác
         //    của mọi project phải nạp lại từ origin.
         let cachePurged = null;
+        let cachePurgeError;
         if (invalidateCdn && head && CDN_PURGE_URL) {
-            cachePurged = await purgeCdnCache();
+            const purge = await purgeCdnCache();
+            cachePurged = purge.ok;
+            cachePurgeError = purge.reason;
+            if (purge.reason) console.error('[cdn-purge]', key, purge.reason);
         }
         res.locals.auditDetail.cachePurged = cachePurged;
+        // Lý do vào cả audit: sau này đọc lại mới biết bản nào publish ra mà
+        // cache chưa chắc sạch, và vì sao.
+        if (cachePurgeError) res.locals.auditDetail.cachePurgeError = cachePurgeError;
 
         // 6. Nội dung nháp giờ đã là bản live → bỏ nháp, không thì file nào cũng
         //    đeo nhãn "có bản nháp" vĩnh viễn dù nháp y hệt bản đang chạy.
         await dropDraft(key);
 
-        res.json({ ok: true, version: nextVersion, cachePurged });
+        res.json({ ok: true, version: nextVersion, cachePurged, cachePurgeError });
     } catch (e) {
         res.status(500).send(String(e.message || e));
     }
