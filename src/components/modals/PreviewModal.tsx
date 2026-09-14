@@ -288,7 +288,7 @@ export function PreviewModal({ value, title, onClose }: Props) {
                         {log.some(e => !e.level && e.raw?.includes('@{')) && (
                             <p className="pv-log-note">
                                 Dòng action hiện url như khai báo trong layout, nên
-                                <code>@{'{…}'}</code> còn nguyên — DivKit đưa action ở dạng chưa
+                                <code>@{'{…}'}</code> còn nguyên — engine đưa action ở dạng chưa
                                 tính. Máy thật thì host app nhận bản đã tính, và dòng lỗi bên trên
                                 (nếu có <code>url=</code>) cũng là bản đã tính.
                             </p>

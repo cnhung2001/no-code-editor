@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hướng dẫn dựng UI với DivKit Builder — Tài liệu cho người không code</title>
+<title>Hướng dẫn dựng UI với iKame NoCode — Tài liệu cho người không code</title>
 <style>
   :root{
     --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#1e1e2e; --border:#e6e8ec;
@@ -138,7 +138,7 @@
 
 <div class="topbar">
   <button class="menu-btn" id="menuBtn" aria-label="Mở menu">☰</button>
-  <span class="logo"><span class="dot"></span> DivKit Builder</span>
+  <span class="logo"><span class="dot"></span> iKame NoCode</span>
   <div class="tabbar">
     <a class="tab active" href="index.html">Tài liệu</a>
   </div>
@@ -147,7 +147,7 @@
 <div class="wrap">
 <nav class="side" id="side">
   <div class="grp">Bắt đầu</div>
-  <a href="#gioi-thieu">1. DivKit là gì</a>
+  <a href="#gioi-thieu">1. iKame NoCode là gì</a>
   <a href="#nocode">★ NoCode Preview (quản lý S3)</a>
   <a href="#giao-dien">2. Làm quen giao diện Builder</a>
   <a href="#cay-components">3. Cây Components &amp; thành phần</a>
@@ -173,7 +173,7 @@
 </nav>
 
 <main>
-  <h1>Hướng dẫn dựng UI với DivKit Builder</h1>
+  <h1>Hướng dẫn dựng UI với iKame NoCode</h1>
   <p class="lead">Tài liệu dành cho người <strong>không biết lập trình</strong>: cách kéo-thả các khối, sắp xếp bố cục (layout), định dạng (styling) và làm cho màn hình "sống" với biến, gói mua và trạng thái — tất cả ngay trong trình dựng trực quan.</p>
 
   <div class="callout note">
@@ -187,13 +187,13 @@
   </div>
 
   <!-- 1 -->
-  <h2 id="gioi-thieu">1. DivKit là gì <a class="anchor" href="#gioi-thieu">#</a></h2>
-  <p><strong>DivKit</strong> là cách dựng giao diện ứng dụng bằng cách mô tả nó dưới dạng các <em>khối xếp lồng nhau</em> (gọi là JSON), thay vì lập trình từng màn hình. Ưu điểm lớn nhất: màn hình được nạp <strong>từ server</strong> ("server-driven UI"), nên bạn có thể <strong>đổi giao diện mà không cần cập nhật app</strong> — chỉ cần sửa cấu hình rồi lưu.</p>
+  <h2 id="gioi-thieu">1. iKame NoCode là gì <a class="anchor" href="#gioi-thieu">#</a></h2>
+  <p><strong>iKame NoCode</strong> là cách dựng giao diện ứng dụng bằng cách mô tả nó dưới dạng các <em>khối xếp lồng nhau</em> (gọi là JSON), thay vì lập trình từng màn hình. Ưu điểm lớn nhất: màn hình được nạp <strong>từ server</strong> ("server-driven UI"), nên bạn có thể <strong>đổi giao diện mà không cần cập nhật app</strong> — chỉ cần sửa cấu hình rồi lưu.</p>
   <p>Bạn <strong>không cần viết JSON bằng tay</strong>. Trình <strong>Builder</strong> cho phép kéo-thả các khối; phía sau, Builder tự sinh ra JSON đó. Tài liệu này dạy bạn dùng Builder.</p>
 
   <figure class="shot tall">
     <img src="images/builder-06-device-preview.jpg" alt="Màn paywall thật trong khung xem trước">
-    <figcaption>Ảnh thật: một màn hình paywall dựng bằng DivKit, hiển thị trong khung xem trước của Builder — đây là kiểu kết quả bạn sẽ tạo ra.</figcaption>
+    <figcaption>Ảnh thật: một màn hình paywall dựng bằng iKame NoCode, hiển thị trong khung xem trước của Builder — đây là kiểu kết quả bạn sẽ tạo ra.</figcaption>
   </figure>
 
   <div class="cards">
@@ -215,14 +215,14 @@
 
   <!-- nocode preview -->
   <h2 id="nocode">★ NoCode Preview — duyệt &amp; xuất bản layout trên S3 <a class="anchor" href="#nocode">#</a></h2>
-  <p><strong>NoCode Preview</strong> là web giúp bạn <strong>quản lý remote layout đang lưu trên S3</strong>: duyệt bucket → xem/sửa layout bằng chính trình DivKit Visual Editor → <strong>đẩy (publish) ngược lên S3</strong> kèm phiên bản và làm mới CDN. Nhờ vậy bạn đổi giao diện mà <strong>không cần phát hành lại app</strong>.</p>
+  <p><strong>NoCode Preview</strong> là web giúp bạn <strong>quản lý remote layout đang lưu trên S3</strong>: duyệt bucket → xem/sửa layout bằng chính trình dựng trực quan của iKame NoCode → <strong>đẩy (publish) ngược lên S3</strong> kèm phiên bản và làm mới CDN. Nhờ vậy bạn đổi giao diện mà <strong>không cần phát hành lại app</strong>.</p>
   <p>Ứng dụng có 2 phần nhưng bạn chỉ mở <strong>một địa chỉ duy nhất</strong>: <code>localhost:8080</code> khi chạy ở máy, hoặc <code>nocode.ikame-solution.com</code> khi dùng bản đã triển khai. Backend nằm sau địa chỉ đó và giữ khoá AWS — web không bao giờ chạm trực tiếp vào khoá. <em>(Đừng mở cổng <code>5173</code>: đó là dev server nội bộ, mở thẳng sẽ hỏng đăng nhập.)</em></p>
 
   <figure>
   <svg viewBox="0 0 880 150" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
     <rect x="14" y="44" width="150" height="62" rx="10" fill="#eaf1ff" stroke="#9cbcf5"/><text x="89" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#2563eb">① Browser</text><text x="89" y="90" font-size="10" text-anchor="middle" fill="#2563eb">duyệt bucket S3</text>
     <text x="180" y="80" font-size="20" fill="#9aa3af">→</text>
-    <rect x="208" y="44" width="150" height="62" rx="10" fill="#f3ecff" stroke="#c4a7f0"/><text x="283" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#6d28d9">② Preview / Builder</text><text x="283" y="90" font-size="10" text-anchor="middle" fill="#7c3aed">sửa bằng DivKit editor</text>
+    <rect x="208" y="44" width="150" height="62" rx="10" fill="#f3ecff" stroke="#c4a7f0"/><text x="283" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#6d28d9">② Preview / Builder</text><text x="283" y="90" font-size="10" text-anchor="middle" fill="#7c3aed">sửa bằng trình dựng</text>
     <text x="374" y="80" font-size="20" fill="#9aa3af">→</text>
     <rect x="402" y="30" width="150" height="40" rx="9" fill="#fdf2e2" stroke="#f5b86a"/><text x="477" y="55" font-size="12" font-weight="700" text-anchor="middle" fill="#b45309">Save draft</text>
     <rect x="402" y="80" width="150" height="40" rx="9" fill="#e7f7f0" stroke="#67c9a3"/><text x="477" y="105" font-size="12" font-weight="700" text-anchor="middle" fill="#0ea371">Push to S3 (publish)</text>
@@ -242,8 +242,8 @@
     <thead><tr><th>Màn</th><th>Dùng để</th></tr></thead>
     <tbody>
       <tr><td><strong>① Browser</strong> (duyệt)</td><td>Cột trái hiện bucket <code>ik-nocode-paywall</code> (region <code>ap-southeast-1</code>) và danh sách <strong>Projects</strong> kèm số layout. Khu giữa là breadcrumb + ô tìm kiếm + lưới thẻ layout. Mỗi thẻ ghi tên, <strong>trạng thái</strong> (Live/Draft/Archived), version, kích thước, ngày sửa. Mở thư mục để đi sâu; mở file <code>.json</code> để xem; ảnh/HTML mở cửa sổ xem nhanh.</td></tr>
-      <tr><td><strong>② Preview</strong> (xem &amp; sửa nhanh)</td><td>Mở một layout và hiển thị <strong>render thật</strong> bằng DivKit editor (sửa được). Thanh trên có: ← quay lại, tên file (dấu <code>*</code> nếu có thay đổi chưa lưu), <strong>Metadata</strong>, <strong>Preview</strong> (mở cửa sổ dùng thử như máy thật), <strong>Download</strong>, <strong>Hướng dẫn</strong>, <strong>Save draft</strong>, <strong>Push to S3</strong>.</td></tr>
-      <tr><td><strong>③ Builder</strong> (sửa đầy đủ)</td><td>Trình sửa đầy đủ: cây khối + preview + bảng thuộc tính/code, palette, hoàn tác/làm lại — chính là DivKit Visual Editor mà các phần 2–14 của tài liệu này mô tả. Đổi được tên layout, rồi <strong>Save draft</strong> / <strong>Push to S3</strong>. Bấm <strong>New layout</strong> ở Browser sẽ mở Builder với một màn trống (Container dọc, nền trắng).</td></tr>
+      <tr><td><strong>② Preview</strong> (xem &amp; sửa nhanh)</td><td>Mở một layout và hiển thị <strong>render thật</strong> bằng trình dựng (sửa được). Thanh trên có: ← quay lại, tên file (dấu <code>*</code> nếu có thay đổi chưa lưu), <strong>Metadata</strong>, <strong>Preview</strong> (mở cửa sổ dùng thử như máy thật), <strong>Download</strong>, <strong>Hướng dẫn</strong>, <strong>Save draft</strong>, <strong>Push to S3</strong>.</td></tr>
+      <tr><td><strong>③ Builder</strong> (sửa đầy đủ)</td><td>Trình sửa đầy đủ: cây khối + preview + bảng thuộc tính/code, palette, hoàn tác/làm lại — chính là trình dựng mà các phần 2–14 của tài liệu này mô tả. Đổi được tên layout, rồi <strong>Save draft</strong> / <strong>Push to S3</strong>. Bấm <strong>New layout</strong> ở Browser sẽ mở Builder với một màn trống (Container dọc, nền trắng).</td></tr>
     </tbody>
   </table>
 
@@ -270,7 +270,7 @@
   <ul>
     <li><strong>Mock mode</strong> (<code>VITE_USE_MOCK=true</code>): dùng dữ liệu giả, không gọi S3 — tập làm quen thoải mái. Có dải băng "MOCK MODE" trên đầu.</li>
     <li><strong>Quyền của bạn</strong>: các nút ghi hiện hay ẩn là do <strong>quyền được cấp trên từng project</strong>, không phải một cài đặt bạn tự bật. Nếu trên đầu màn có nhãn <em>"Chế độ chỉ xem · không ghi S3"</em> hoặc <em>"Sửa &amp; lưu draft được · không có quyền publish"</em> thì đó là quyền của tài khoản bạn — cần thêm quyền thì hỏi người quản trị. Ẩn nút chỉ là cho đỡ vướng mắt; máy chủ vẫn chặn độc lập.</li>
-    <li><strong>Định dạng lưu</strong> (<code>VITE_SAVE_FORMAT</code>): <code>plain</code> (DivKit thuần — tương thích client cũ) hoặc <code>wrapper</code> (<code>{screen_id, label, remote_layout, variables}</code>). <em>Cần xác nhận với team mobile dùng định dạng nào.</em></li>
+    <li><strong>Định dạng lưu</strong> (<code>VITE_SAVE_FORMAT</code>): <code>plain</code> (JSON thuần — tương thích client cũ) hoặc <code>wrapper</code> (<code>{screen_id, label, remote_layout, variables}</code>). <em>Cần xác nhận với team mobile dùng định dạng nào.</em></li>
   </ul>
 
   <!-- 2 -->
@@ -1016,8 +1016,8 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
   </table>
 
   <footer>
-    Tài liệu nội bộ hướng dẫn dựng UI với DivKit Builder · biên soạn cho người không code.<br>
-    Tham khảo: DivKit official docs (divkit.tech) · Superwall Paywall Editor docs · bộ tài liệu phần tử DivKit nội bộ.
+    Tài liệu nội bộ hướng dẫn dựng UI với iKame NoCode · biên soạn cho người không code.<br>
+    iKame NoCode dựng trên engine mã nguồn mở DivKit (Apache-2.0) — tra cứu thuộc tính chi tiết tại divkit.tech. Tham khảo thêm: Superwall Paywall Editor docs · bộ tài liệu phần tử nội bộ.
   </footer>
 </main>
 </div>

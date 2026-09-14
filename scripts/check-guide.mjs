@@ -99,6 +99,21 @@ const html = readFileSync(FILE, 'utf-8');
     for (const [needle, why] of banned) {
         ok(!html.includes(needle), `Không còn "${needle}"`, why);
     }
+
+    // Tên sản phẩm là "iKame NoCode". Tài liệu người dùng đọc không nói tên
+    // engine — TRỪ đúng một dòng ghi nguồn ở footer, giữ lại vì engine là
+    // Apache-2.0 và người cần tra thuộc tính vẫn phải biết tra ở đâu.
+    // Đếm theo VỊ TRÍ chứ không theo số lần: một dòng ghi nguồn hợp lệ chứa cả
+    // "DivKit" lẫn "divkit.tech", nên giới hạn bằng con số là sai ngay từ đầu.
+    const outside = [...html.matchAll(/[Dd]iv[Kk]it/g)].filter((m) => {
+        const around = html.slice(Math.max(0, m.index - 260), m.index + 260);
+        return !/Apache-2\.0/.test(around);
+    });
+    ok(outside.length === 0, 'Không nhắc engine ngoài dòng ghi nguồn',
+        outside.length
+            ? `${outside.length} chỗ — phần người dùng đọc phải gọi là "iKame NoCode"`
+            : '');
+    ok(html.includes('iKame NoCode'), 'Tài liệu gọi đúng tên sản phẩm');
 }
 
 // ── 6. Đối chiếu từ vựng DivKit (bỏ qua nếu không có bộ docs) ───────────
