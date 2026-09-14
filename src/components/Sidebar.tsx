@@ -24,6 +24,7 @@ interface Props {
     /** Quyền cấp system — chỉ để ẩn/hiện mục Admin, backend vẫn tự gate. */
     canAdmin?: boolean;
     onAdmin?(): void;
+    onGuide(): void;
 }
 
 export function Sidebar({
@@ -34,7 +35,8 @@ export function Sidebar({
     onFile,
     onRoot,
     canAdmin,
-    onAdmin
+    onAdmin,
+    onGuide
 }: Props) {
     return (
         <aside className="sidebar">
@@ -42,7 +44,7 @@ export function Sidebar({
                 <span className="brand-mark">&lt;/&gt;</span>
                 <div>
                     <div className="brand-name">NoCode Preview</div>
-                    <div className="brand-sub">DivKit · Remote Config</div>
+                    <div className="brand-sub">iKame NoCode · Remote Config</div>
                 </div>
             </button>
 
@@ -94,6 +96,10 @@ export function Sidebar({
             )}
 
             <div className="sidebar-foot">
+                <button className="tree-item" onClick={onGuide}>
+                    <span className="tree-ic">{Icon.info}</span>
+                    <span className="tree-name">Hướng dẫn</span>
+                </button>
                 {canAdmin && onAdmin && (
                     <button className="tree-item admin-link" onClick={onAdmin}>
                         <span className="tree-ic">{Icon.settings}</span>

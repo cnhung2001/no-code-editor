@@ -251,12 +251,19 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .draft-flag { color: var(--amber, #8a5300); font-size: 11px; font-weight: 600; }
 .meta-warn { color: #8a5300; }
 .push-err { color: #b3261e; font-size: 13px; }
-.push-warn { color: #8a5300; background: #fff4e0; border: 1px solid #f0d0a0;
-    border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.45; }
-
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 11px; font-size: 13px; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 36px rgba(0, 0, 0, .3); z-index: 60; }
 .toast svg { color: #22E345; }
+/* Ba trạng thái, ba vẻ mặt: đang chạy thì mờ đi cho khỏi giành chú ý, hỏng thì
+   phải nổi lên vì có việc phải làm. */
+.toast--busy { background: #2c2f36; }
+.toast--busy svg { color: #9aa0aa; }
+.toast--warn { background: #7a3c00; align-items: flex-start; max-width: min(560px, calc(100vw - 44px)); }
+.toast--warn .btn { flex: none; color: #ffd9a8; border-color: rgba(255, 217, 168, .35); }
+.toast-note { color: #9aa0aa; }
+/* Lý do và việc phải làm xuống dòng riêng — dồn một cục thì đúng câu cần đọc
+   lại chìm vào giữa đoạn. */
+.toast-reason { display: block; margin-top: 4px; font-style: normal; color: #ffd9a8; }
 
 /* ── Login ───────────────────────────────────────────────────────────────── */
 .login { grid-column: 1 / -1; display: grid; place-items: center; height: 100vh; background: var(--bg); }
@@ -323,6 +330,16 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 }
 
 /* ── Admin: mapping project + audit log ──────────────────────────────────── */
+/* ── Hướng dẫn (tài liệu tĩnh trong iframe) ───────────────────────────────── */
+.help { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg); }
+.help-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.help-title { font-weight: 600; }
+/* Nút "Mở tab mới" dồn về phải, tách khỏi nhóm điều hướng bên trái. */
+.help-head .btn { margin-left: auto; }
+/* Tài liệu tự cuộn BÊN TRONG iframe; khung ngoài không được cuộn theo, nếu
+   không sẽ có hai thanh cuộn lồng nhau. */
+.help-frame { flex: 1; width: 100%; border: 0; display: block; }
+
 .admin { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg); }
 .admin-head { display: flex; align-items: center; gap: 20px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .admin-tabs { display: flex; gap: 4px; }

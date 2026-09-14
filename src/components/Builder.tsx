@@ -1,6 +1,7 @@
 // ── Màn Builder: DivProEditor đầy đủ + Save draft / Push to S3 ─────────────
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons';
+import type { GuideAnchor } from '../lib/guide';
 import { Loader } from './Loader';
 import { s3 } from '../s3';
 import { DivEditor, type DivEditorHandle } from '../editor/DivEditor';
@@ -35,9 +36,11 @@ interface Props {
     isNew: boolean;
     onBack(): void;
     onPush(raw: string, key: string, meta: LayoutMeta): void;
+    /** Mở hướng dẫn trong app, nhảy tới mục hợp với màn đang đứng. */
+    onGuide(anchor?: GuideAnchor): void;
 }
 
-export function Builder({ path, file, isNew, onBack, onPush }: Props) {
+export function Builder({ path, file, isNew, onBack, onPush, onGuide }: Props) {
     const perms = useProjectPerms(path[0]);
     const project = path[0] || '';
     const editorRef = useRef<DivEditorHandle>(null);
@@ -97,6 +100,11 @@ export function Builder({ path, file, isNew, onBack, onPush }: Props) {
                     <span className={'bld-tag' + (isNew ? ' new' : '')}>{isNew ? 'New · Draft' : dirty ? 'Editing*' : 'Editing'}</span>
                 </div>
                 <div className="bld-right">
+                    {/* Neo thẳng vào mục quy trình, không mở từ đầu tài liệu: người
+                        đang đứng trong Builder cần đúng phần đó, không phải "DivKit là gì". */}
+                    <button className="btn ghost sm" title="Hướng dẫn dựng UI" onClick={() => onGuide('quy-trinh')}>
+                        {Icon.info} Hướng dẫn
+                    </button>
                     {perms.update && (
                         <button className="btn ghost sm" onClick={saveDraft}>{Icon.save} Save draft</button>
                     )}

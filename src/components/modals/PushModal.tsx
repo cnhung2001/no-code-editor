@@ -8,7 +8,8 @@ import type { LayoutMeta } from '../../types';
 interface Props {
     target: { key: string; body: string; meta?: LayoutMeta };
     onClose(): void;
-    onDone(): void;
+    /** `purgeId` để App theo dõi việc xoá cache CDN; null = không có gì phải xoá. */
+    onDone(purgeId: string | null): void;
 }
 
 export function PushModal({ target, onClose, onDone }: Props) {
@@ -18,9 +19,6 @@ export function PushModal({ target, onClose, onDone }: Props) {
     const [invalidate, setInvalidate] = useState(true);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
-    // Publish xong nhưng purge cache hỏng: KHÔNG phải lỗi publish (file đã lên S3),
-    // nhưng cũng không được lặng lẽ đóng — app vẫn ăn bản cũ trong cache.
-    const [warn, setWarn] = useState<string | null>(null);
 
     useEffect(() => {
         s3.getObjectText(target.key).then(setCurrent).catch(() => setCurrent(''));
@@ -38,12 +36,9 @@ export function PushModal({ target, onClose, onDone }: Props) {
                 invalidateCdn: invalidate,
                 meta: target.meta
             });
-            if (res.cachePurged === false) {
-                setWarn(`Đã publish ${res.version} lên S3, NHƯNG xoá cache CDN hỏng — app có thể còn ăn bản cũ. Xoá cache tay rồi hãy báo QC.`);
-                setBusy(false);
-                return;
-            }
-            onDone();
+            // Không chờ purge: nó mất ~25s và chạy tiếp dù modal đóng. Kết quả
+            // hiện ở tầng App (CachePurgeToast) để chỗ này trả tay lại ngay.
+            onDone(res.purgeId);
         } catch (e) {
             setErr(String((e as Error).message || e));
             setBusy(false);
@@ -97,19 +92,12 @@ export function PushModal({ target, onClose, onDone }: Props) {
                     </label>
 
                     {err && <div className="push-err">Lỗi: {err}</div>}
-                    {warn && <div className="push-warn">{warn}</div>}
                 </div>
                 <footer className="modal-foot">
-                    {warn ? (
-                        <button className="btn primary sm" onClick={onDone}>Đã hiểu, đóng</button>
-                    ) : (
-                        <>
-                            <button className="btn ghost sm" onClick={onClose}>Huỷ</button>
-                            <button className="btn primary sm" disabled={busy} onClick={publish}>
-                                {Icon.upload} {busy ? 'Đang publish…' : 'Publish'}
-                            </button>
-                        </>
-                    )}
+                    <button className="btn ghost sm" onClick={onClose}>Huỷ</button>
+                    <button className="btn primary sm" disabled={busy} onClick={publish}>
+                        {Icon.upload} {busy ? 'Đang publish…' : 'Publish'}
+                    </button>
                 </footer>
             </div>
         </div>

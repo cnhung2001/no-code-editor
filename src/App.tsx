@@ -10,13 +10,18 @@ const LayoutPreview = lazy(() => import('./components/LayoutPreview').then((m) =
 const Builder = lazy(() => import('./components/Builder').then((m) => ({ default: m.Builder })));
 // Màn admin chỉ vài người mở → tách chunk, không nằm trong bundle chính.
 const AdminScreen = lazy(() => import('./admin/AdminScreen').then((m) => ({ default: m.AdminScreen })));
+// Hướng dẫn là một tài liệu tĩnh trong iframe — nhẹ, nhưng cũng không có lý
+// do nằm trong bundle khởi động của người chưa bao giờ mở nó.
+const HelpScreen = lazy(() => import('./components/HelpScreen').then((m) => ({ default: m.HelpScreen })));
 import { HtmlModal } from './components/modals/HtmlModal';
 import { PushModal } from './components/modals/PushModal';
+import { CachePurgeToast } from './components/CachePurgeToast';
 import { s3, IS_MOCK } from './s3';
 import { AuthProvider, useAuth, useProjectPerms } from './auth/AuthContext';
 import { LoginScreen } from './auth/LoginScreen';
 import { buildUrl, parseUrl } from './lib/route';
 import type { ProjectInfo, S3Item, LayoutMeta } from './types';
+import type { GuideAnchor } from './lib/guide';
 
 type View = 'browser' | 'preview' | 'builder';
 
@@ -65,6 +70,12 @@ function Shell() {
     // không phải vị trí trong bucket nên buildUrl chặn nó trước, còn `path` vẫn
     // giữ chỗ cũ để đóng Admin là quay về đúng chỗ đang đứng.
     const [showAdmin, setShowAdmin] = useState(false);
+    // KHÁC Admin: hướng dẫn CÓ mặt trong URL (`/help`, `/help/quy-trinh`).
+    // Nó là chỗ người ta ngồi lại đọc, nên F5 phải giữ nguyên trang, Back phải
+    // thoát ra được, và gửi link cho đồng nghiệp phải mở đúng mục.
+    // `undefined` = đang không mở; `null` = mở từ đầu tài liệu.
+    const [helpAnchor, setHelpAnchor] = useState<GuideAnchor | null | undefined>(undefined);
+    const openHelp = (anchor?: GuideAnchor) => setHelpAnchor(anchor ?? null);
     const [view, setView] = useState<View>('browser');
     const [activeFile, setActiveFile] = useState<S3Item | null>(null);
     const [isNew, setIsNew] = useState(false);
@@ -72,6 +83,9 @@ function Shell() {
     const [imageFile, setImageFile] = useState<S3Item | null>(null);
     const [htmlFile, setHtmlFile] = useState<S3Item | null>(null);
     const [pushTarget, setPushTarget] = useState<{ key: string; body: string; meta?: LayoutMeta } | null>(null);
+    // Việc xoá cache CDN sống LÂU HƠN modal đã khởi động nó: ~25s, và người ta
+    // đóng modal ngay khi file lên S3 xong. Nên nó phải nằm ở đây.
+    const [purgeId, setPurgeId] = useState<string | null>(null);
 
     useEffect(() => {
         s3.listProjects().then(setProjects).catch(() => setProjects([]));
@@ -94,7 +108,7 @@ function Shell() {
 
         /** Khôi phục state từ pathname. Segment cuối là file hay thư mục thì phải hỏi S3. */
         async function applyRoute(pathname: string) {
-            const { segments, isNew: wantNew, isAdmin: wantAdmin } = parseUrl(pathname);
+            const { segments, isNew: wantNew, isAdmin: wantAdmin, help } = parseUrl(pathname);
             console.log('[route] applyRoute', pathname, segments);
             restoringRef.current = true;
 
@@ -107,8 +121,17 @@ function Shell() {
             setShowAdmin(wantAdmin);
             if (wantAdmin) {
                 setIsNew(false);
+                setHelpAnchor(undefined);
                 return;
             }
+
+            // Hướng dẫn cũng vậy: không đụng `path`/`view`, nên Back trả về
+            // đúng file đang mở dở.
+            if (help !== null) {
+                setHelpAnchor((help || null) as GuideAnchor | null);
+                return;
+            }
+            setHelpAnchor(undefined);
 
             // Tạo layout mới cần có project — "/new" trần thì bỏ qua cờ.
             if (wantNew && segments.length) {
@@ -188,7 +211,16 @@ function Shell() {
                   : htmlFile
                     ? htmlFile.name
                     : null;
-        const url = buildUrl({ path, fileName, isNew: view === 'builder' && isNew, isAdmin: showAdmin });
+        const url = buildUrl({
+            path,
+            fileName,
+            isNew: view === 'builder' && isNew,
+            isAdmin: showAdmin,
+            // undefined = không mở hướng dẫn → null cho buildUrl. Mở mà không có
+            // neo là `null` ở state nhưng `''` ở URL — hai cách nói "từ đầu tài
+            // liệu" khác nhau, lẫn là ra `/` thay vì `/help`.
+            help: helpAnchor === undefined ? null : (helpAnchor ?? '')
+        });
 
         console.log('[route] sync', {
             url,
@@ -215,7 +247,7 @@ function Shell() {
         } else {
             window.history.pushState(null, '', url);
         }
-    }, [path, view, activeFile, imageFile, htmlFile, isNew, showAdmin]);
+    }, [path, view, activeFile, imageFile, htmlFile, isNew, showAdmin, helpAnchor]);
 
     // Gõ thẳng /admin mà không phải admin hệ thống: đá về gốc. Đây CHỈ là UX —
     // backend gate độc lập bằng requireSystemAdmin, ẩn màn không phải phân quyền.
@@ -280,6 +312,19 @@ function Shell() {
           ? 'Sửa & lưu draft được · không có quyền publish'
           : null;
 
+    if (helpAnchor !== undefined) {
+        return (
+            <div className="nc-app nc-app--no-sidebar">
+                <Suspense fallback={<Loader label="Đang mở hướng dẫn…" />}>
+                    <HelpScreen
+                        anchor={helpAnchor ?? undefined}
+                        onBack={() => setHelpAnchor(undefined)}
+                    />
+                </Suspense>
+            </div>
+        );
+    }
+
     if (showAdmin && isSystemAdmin) {
         return (
             <div className="nc-app nc-app--no-sidebar">
@@ -302,6 +347,7 @@ function Shell() {
                     onRoot={gotoRoot}
                     canAdmin={isSystemAdmin}
                     onAdmin={() => setShowAdmin(true)}
+                    onGuide={() => openHelp()}
                 />
             )}
 
@@ -319,6 +365,7 @@ function Shell() {
                         file={activeFile}
                         onBack={() => setView('browser')}
                         onPush={(raw, meta) => activeFile.key && setPushTarget({ key: activeFile.key, body: raw, meta })}
+                        onGuide={openHelp}
                     />
                 </Suspense>
             )}
@@ -334,6 +381,7 @@ function Shell() {
                             setView(activeFile ? 'preview' : 'browser');
                         }}
                         onPush={(raw, key, meta) => setPushTarget({ key, body: raw, meta })}
+                        onGuide={openHelp}
                     />
                 </Suspense>
             )}
@@ -344,12 +392,17 @@ function Shell() {
                 <PushModal
                     target={pushTarget}
                     onClose={() => setPushTarget(null)}
-                    onDone={() => {
+                    onDone={(purgeId) => {
                         setPushTarget(null);
                         setIsNew(false);
                         setView('browser');
+                        setPurgeId(purgeId);
                     }}
                 />
+            )}
+
+            {purgeId && (
+                <CachePurgeToast purgeId={purgeId} onDismiss={() => setPurgeId(null)} />
             )}
         </div>
     );

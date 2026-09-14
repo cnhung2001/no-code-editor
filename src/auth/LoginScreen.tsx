@@ -23,7 +23,7 @@ export function LoginScreen({ notice }: { notice?: string | null }) {
                     <span className="brand-mark">&lt;/&gt;</span>
                     <div>
                         <div className="brand-name">NoCode Editor</div>
-                        <div className="brand-sub">DivKit · Remote Config</div>
+                        <div className="brand-sub">iKame NoCode · Remote Config</div>
                     </div>
                 </div>
 
