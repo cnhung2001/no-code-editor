@@ -6,30 +6,46 @@
 <title>Hướng dẫn dựng UI với iKame NoCode — Tài liệu cho người không code</title>
 <style>
   :root{
-    --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#1e1e2e; --border:#e6e8ec;
-    --text:#1f2329; --muted:#5b6675; --primary:#7c3aed; --primary-soft:#f3ecff;
-    --green:#0ea371; --green-soft:#e7f7f0; --amber:#b45309; --amber-soft:#fdf2e2;
-    --blue:#2563eb; --blue-soft:#eaf1ff; --red:#dc2626; --red-soft:#fdeaea;
-    --radius:10px; --sidebar:288px; --maxw:860px;
-    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    /* Bảng màu lấy nguyên từ app (src/styles/app.css). Tài liệu mở ra TỪ TRONG
+       app, nên nó không được cho cảm giác nhảy sang một trang của ai khác. */
+    --bg:#f3f4f1;            /* app --bg     : nền trang */
+    --panel:#ffffff;         /* app --panel  : thẻ, sidebar, topbar — mặt nổi */
+    --bg-soft:#e9ebe6;       /* nền chìm: đầu bảng, hover, sơ đồ */
+    --bg-code:#14181c;       /* app --ink, dùng làm nền khối code */
+    --border:#e4e6e2;        /* app --line */
+    --text:#14181c;          /* app --ink */
+    --muted:#6b757e;         /* app --ink-3 */
+    --primary:#0c8a3e;       /* app --green   : link, tab đang chọn, số thứ tự */
+    --primary-strong:#0a6f33;/* app --green-2 : chữ đặt trên nền primary-soft */
+    --primary-soft:#eaf6ee;  /* app --green-bg */
+    --green:#0c8a3e; --green-soft:#eaf6ee;
+    --amber:#b06f00; --amber-soft:#fdf2e2;   /* app --amber */
+    --blue:#2563eb; --blue-soft:#eaf1ff;
+    --red:#dc2626; --red-soft:#fdeaea;
+    --radius:12px;           /* app --radius */
+    --sidebar:288px; --maxw:860px;
+    /* Cùng stack với app. App KHÔNG nạp font từ mạng — chỉ dùng nếu máy có sẵn
+       — nên tài liệu cũng thế, không thêm phụ thuộc mạng cho một trang vốn tự
+       chứa hoàn toàn. */
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   body{margin:0;font-family:var(--sans);color:var(--text);background:var(--bg);line-height:1.65;font-size:16px}
   a{color:var(--primary);text-decoration:none}
   a:hover{text-decoration:underline}
-  code{font-family:var(--mono);font-size:.88em;background:var(--primary-soft);color:#5b21b6;padding:.12em .4em;border-radius:5px}
+  code{font-family:var(--mono);font-size:.88em;background:var(--primary-soft);color:var(--primary-strong);padding:.12em .4em;border-radius:5px}
   pre{background:var(--bg-code);color:#e4e4ef;padding:16px 18px;border-radius:var(--radius);overflow:auto;font-family:var(--mono);font-size:13.5px;line-height:1.55}
   pre code{background:none;color:inherit;padding:0;font-size:inherit}
 
   /* layout */
   .topbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:12px 20px}
   .topbar .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
-  .topbar .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#c084fc);display:inline-block}
+  .topbar .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--primary),#3fbf6d);display:inline-block}
   .topbar .tag{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
   .topbar .tabbar{display:flex;gap:6px;margin-left:18px}
-  .topbar .tabbar .tab{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 14px;font-size:14px;color:var(--text);text-decoration:none}
+  .topbar .tabbar .tab{border:1px solid var(--border);background:var(--panel);border-radius:8px;padding:6px 14px;font-size:14px;color:var(--text);text-decoration:none}
   .topbar .tabbar .tab:hover{background:var(--bg-soft);text-decoration:none}
   .topbar .tabbar .tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
   .menu-btn{display:none;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:18px;cursor:pointer}
@@ -39,7 +55,7 @@
   nav.side .grp{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:18px 10px 6px}
   nav.side a{display:block;padding:6px 10px;border-radius:7px;color:var(--text);font-size:14px}
   nav.side a:hover{background:var(--bg-soft);text-decoration:none}
-  nav.side a.active{background:var(--primary-soft);color:#5b21b6;font-weight:600}
+  nav.side a.active{background:var(--primary-soft);color:var(--primary-strong);font-weight:600}
 
   main{flex:1;min-width:0;padding:36px 48px 120px;max-width:calc(var(--maxw) + 96px)}
   main h1{font-size:32px;line-height:1.2;margin:.2em 0 .3em}
@@ -70,17 +86,17 @@
   .steps>li:last-child::after{display:none}
 
   .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-  .pill{font-size:13px;border:1px solid var(--border);background:#fff;border-radius:20px;padding:4px 12px;color:var(--muted)}
+  .pill{font-size:13px;border:1px solid var(--border);background:var(--panel);border-radius:20px;padding:4px 12px;color:var(--muted)}
 
   .diagram{font-family:var(--mono);font-size:12.5px;white-space:pre;background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius);padding:16px;overflow:auto;line-height:1.4;color:var(--text)}
 
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
-  .card{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:#fff}
+  .card{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--panel)}
   .card .ic{font-size:22px}
   .card .t{font-weight:700;margin:6px 0 2px}
   .card .d{font-size:13.5px;color:var(--muted)}
 
-  .kbd{font-family:var(--mono);font-size:12px;border:1px solid #c9ced6;border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:#fff}
+  .kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--panel)}
   hr.soft{border:none;border-top:1px solid var(--border);margin:2.5em 0}
   footer{color:var(--muted);font-size:13.5px;border-top:1px solid var(--border);padding-top:18px;margin-top:60px}
   .anchor{color:var(--muted);font-weight:400;opacity:0;margin-left:8px;font-size:.7em}
@@ -88,7 +104,7 @@
 
   @media (max-width:980px){
     .menu-btn{display:inline-block}
-    nav.side{position:fixed;left:0;top:51px;z-index:40;background:#fff;transform:translateX(-105%);transition:transform .2s;box-shadow:0 10px 40px rgba(0,0,0,.15)}
+    nav.side{position:fixed;left:0;top:51px;z-index:40;background:var(--panel);transform:translateX(-105%);transition:transform .2s;box-shadow:0 10px 40px rgba(0,0,0,.15)}
     nav.side.open{transform:none}
     main{padding:24px 18px 100px}
     main h1{font-size:26px}
@@ -97,30 +113,30 @@
 
   /* figures & svg illustrations */
   figure{margin:18px 0}
-  figure svg{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);background:#fff}
+  figure svg{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel)}
   figure figcaption{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
   .fig-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:18px 0}
   .fig-row figure{margin:0}
   .gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:18px 0}
-  .gitem{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fff}
+  .gitem{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
   .gitem .gh{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-soft);font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}
   .gitem .gb{padding:14px}
   .gitem .gb p{margin:.2em 0 .6em;font-size:13.5px;color:var(--muted)}
-  .gitem svg{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
+  .gitem svg{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
   .gitem pre{margin:10px 0 0;font-size:12px;padding:10px 12px}
 
   /* real screenshots */
   .shot{margin:18px 0}
   .shot img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 14px rgba(0,0,0,.06)}
   .shot.tall img{width:auto;max-width:100%;max-height:700px;margin:0 auto}
-  .shot-ph{display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:2px dashed #c4a7f0;border-radius:var(--radius);background:#faf7ff;color:#6d28d9;font-size:14px;text-align:center;padding:24px}
+  .shot-ph{display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:2px dashed var(--primary);border-radius:var(--radius);background:var(--primary-soft);color:var(--primary-strong);font-size:14px;text-align:center;padding:24px}
   .shot-ph .big{font-size:26px}
-  .badge-shot{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#7c3aed;border-radius:5px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+  .badge-shot{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--primary);border-radius:5px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* samples playground */
   .samples{margin:18px 0}
   .samples .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-  .samples .tabbtn{font-size:13px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--text);font-family:inherit}
+  .samples .tabbtn{font-size:13px;border:1px solid var(--border);background:var(--panel);border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--text);font-family:inherit}
   .samples .tabbtn:hover{background:var(--bg-soft)}
   .samples .tabbtn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
   .samples .ttl{font-weight:700;font-size:16px;margin:4px 0 2px}
@@ -183,7 +199,7 @@
 
   <div class="callout note">
     <div class="h">Về hình minh hoạ</div>
-    Các hình trong tài liệu là <strong>mô phỏng SVG vẽ sát giao diện Builder thật</strong> — nhúng thẳng trong file nên luôn hiển thị, không cần tải ảnh rời. Nếu muốn thay bằng ảnh chụp thật, bạn có thể chụp Builder (Mac: <span class="kbd">Cmd+Shift+4</span>) và lưu cạnh file này.
+    Ảnh chụp trong tài liệu là <strong>giao diện thật, chụp từ chính công cụ này</strong>, trên một layout có thật trong bucket. Các hình vẽ dạng sơ đồ là SVG nhúng thẳng trong file. Giao diện có đổi thì ảnh sẽ cũ đi — thấy chỗ nào lệch, báo để chụp lại.
   </div>
 
   <!-- 1 -->
@@ -222,14 +238,14 @@
   <svg viewBox="0 0 880 150" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
     <rect x="14" y="44" width="150" height="62" rx="10" fill="#eaf1ff" stroke="#9cbcf5"/><text x="89" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#2563eb">① Browser</text><text x="89" y="90" font-size="10" text-anchor="middle" fill="#2563eb">duyệt bucket S3</text>
     <text x="180" y="80" font-size="20" fill="#9aa3af">→</text>
-    <rect x="208" y="44" width="150" height="62" rx="10" fill="#f3ecff" stroke="#c4a7f0"/><text x="283" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#6d28d9">② Preview / Builder</text><text x="283" y="90" font-size="10" text-anchor="middle" fill="#7c3aed">sửa bằng trình dựng</text>
+    <rect x="208" y="44" width="150" height="62" rx="10" fill="#eaf6ee" stroke="#9ccfae"/><text x="283" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="var(--primary-strong)">② Preview / Builder</text><text x="283" y="90" font-size="10" text-anchor="middle" fill="#0c8a3e">sửa bằng trình dựng</text>
     <text x="374" y="80" font-size="20" fill="#9aa3af">→</text>
-    <rect x="402" y="30" width="150" height="40" rx="9" fill="#fdf2e2" stroke="#f5b86a"/><text x="477" y="55" font-size="12" font-weight="700" text-anchor="middle" fill="#b45309">Save draft</text>
-    <rect x="402" y="80" width="150" height="40" rx="9" fill="#e7f7f0" stroke="#67c9a3"/><text x="477" y="105" font-size="12" font-weight="700" text-anchor="middle" fill="#0ea371">Push to S3 (publish)</text>
+    <rect x="402" y="30" width="150" height="40" rx="9" fill="#fdf2e2" stroke="#f5b86a"/><text x="477" y="55" font-size="12" font-weight="700" text-anchor="middle" fill="#b06f00">Save draft</text>
+    <rect x="402" y="80" width="150" height="40" rx="9" fill="#eaf6ee" stroke="#67c9a3"/><text x="477" y="105" font-size="12" font-weight="700" text-anchor="middle" fill="#0c8a3e">Push to S3 (publish)</text>
     <text x="568" y="80" font-size="20" fill="#9aa3af">→</text>
-    <rect x="596" y="44" width="120" height="62" rx="10" fill="#f7f8fa" stroke="#cbd0d8"/><text x="656" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#1f2329">S3 + CDN</text><text x="656" y="90" font-size="10" text-anchor="middle" fill="#5b6675">version · invalidate</text>
+    <rect x="596" y="44" width="120" height="62" rx="10" fill="#e9ebe6" stroke="#cbd0d8"/><text x="656" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#14181c">S3 + CDN</text><text x="656" y="90" font-size="10" text-anchor="middle" fill="#6b757e">version · invalidate</text>
     <text x="724" y="80" font-size="20" fill="#9aa3af">→</text>
-    <rect x="752" y="44" width="116" height="62" rx="10" fill="#1b1530"/><text x="810" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">App người dùng</text><text x="810" y="90" font-size="10" text-anchor="middle" fill="#b9b2cf">cập nhật ngay</text>
+    <rect x="752" y="44" width="116" height="62" rx="10" fill="#14181c"/><text x="810" y="72" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">App người dùng</text><text x="810" y="90" font-size="10" text-anchor="middle" fill="#b4c4ba">cập nhật ngay</text>
   </svg>
   <figcaption>Luồng làm việc của NoCode Preview: duyệt → sửa → lưu nháp / xuất bản → S3/CDN → tới app người dùng mà không cần lên store.</figcaption>
   </figure>
@@ -381,10 +397,10 @@
       <div class="gb">
         <p>Xếp các con từ trên xuống. Dùng cho cả màn hình, danh sách.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <rect x="20" y="14" width="220" height="122" rx="8" fill="#faf7ff" stroke="#c9b8f0" stroke-dasharray="4 3"/>
-          <rect x="36" y="28" width="188" height="26" rx="5" fill="#a855f7"/><text x="130" y="45" font-size="11" fill="#fff" text-anchor="middle">Con 1</text>
-          <rect x="36" y="62" width="188" height="26" rx="5" fill="#c084fc"/><text x="130" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 2</text>
-          <rect x="36" y="96" width="188" height="26" rx="5" fill="#d8b4fe"/><text x="130" y="113" font-size="11" fill="#4c1d95" text-anchor="middle">Con 3</text>
+          <rect x="20" y="14" width="220" height="122" rx="8" fill="var(--primary-soft)" stroke="#9ccfae" stroke-dasharray="4 3"/>
+          <rect x="36" y="28" width="188" height="26" rx="5" fill="#2fa85c"/><text x="130" y="45" font-size="11" fill="#fff" text-anchor="middle">Con 1</text>
+          <rect x="36" y="62" width="188" height="26" rx="5" fill="#3fbf6d"/><text x="130" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 2</text>
+          <rect x="36" y="96" width="188" height="26" rx="5" fill="#9ccfae"/><text x="130" y="113" font-size="11" fill="#0a6f33" text-anchor="middle">Con 3</text>
         </svg>
         <pre><code>orientation: vertical</code></pre>
       </div>
@@ -395,10 +411,10 @@
       <div class="gb">
         <p>Xếp các con từ trái sang phải. Dùng cho icon + chữ, nút + giá.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <rect x="20" y="40" width="220" height="70" rx="8" fill="#faf7ff" stroke="#c9b8f0" stroke-dasharray="4 3"/>
-          <rect x="34" y="56" width="58" height="38" rx="5" fill="#a855f7"/><text x="63" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 1</text>
-          <rect x="100" y="56" width="58" height="38" rx="5" fill="#c084fc"/><text x="129" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 2</text>
-          <rect x="166" y="56" width="58" height="38" rx="5" fill="#d8b4fe"/><text x="195" y="79" font-size="11" fill="#4c1d95" text-anchor="middle">Con 3</text>
+          <rect x="20" y="40" width="220" height="70" rx="8" fill="var(--primary-soft)" stroke="#9ccfae" stroke-dasharray="4 3"/>
+          <rect x="34" y="56" width="58" height="38" rx="5" fill="#2fa85c"/><text x="63" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 1</text>
+          <rect x="100" y="56" width="58" height="38" rx="5" fill="#3fbf6d"/><text x="129" y="79" font-size="11" fill="#fff" text-anchor="middle">Con 2</text>
+          <rect x="166" y="56" width="58" height="38" rx="5" fill="#9ccfae"/><text x="195" y="79" font-size="11" fill="#0a6f33" text-anchor="middle">Con 3</text>
         </svg>
         <pre><code>orientation: horizontal</code></pre>
       </div>
@@ -409,7 +425,7 @@
       <div class="gb">
         <p>Con sau đè lên con trước. Dùng cho nhãn "BEST OFFER" trên góc thẻ.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <rect x="40" y="40" width="180" height="70" rx="8" fill="#2a2440"/><text x="130" y="82" font-size="11" fill="#fff" text-anchor="middle">Thẻ gói</text>
+          <rect x="40" y="40" width="180" height="70" rx="8" fill="#1f262b"/><text x="130" y="82" font-size="11" fill="#fff" text-anchor="middle">Thẻ gói</text>
           <rect x="150" y="30" width="78" height="22" rx="11" fill="#f59e0b"/><text x="189" y="45" font-size="10" fill="#fff" text-anchor="middle" font-weight="700">BEST OFFER</text>
         </svg>
         <pre><code>orientation: overlap</code></pre>
@@ -421,9 +437,9 @@
       <div class="gb">
         <p>Một đoạn chữ: cỡ, độ đậm, màu, căn lề.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <rect x="0" y="0" width="260" height="150" fill="#1b1530"/>
+          <rect x="0" y="0" width="260" height="150" fill="#14181c"/>
           <text x="130" y="58" font-size="20" font-weight="700" fill="#fff" text-anchor="middle">Device found</text>
-          <text x="130" y="86" font-size="12" fill="#b9b2cf" text-anchor="middle">Enjoy your TV now</text>
+          <text x="130" y="86" font-size="12" fill="#b4c4ba" text-anchor="middle">Enjoy your TV now</text>
         </svg>
         <pre><code>font_size: 20 · font_weight: bold
 text_color: #FFFFFF · font_size_unit: dp</code></pre>
@@ -435,10 +451,10 @@ text_color: #FFFFFF · font_size_unit: dp</code></pre>
       <div class="gb">
         <p>Ảnh từ URL. <code>scale</code> quyết định cách lấp khung.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <defs><linearGradient id="ig" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+          <defs><linearGradient id="ig" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#0c8a3e"/></linearGradient></defs>
           <rect x="20" y="16" width="220" height="118" rx="8" fill="url(#ig)"/>
           <circle cx="80" cy="58" r="16" fill="#fde68a"/>
-          <path d="M40 120 L100 74 L140 104 L180 70 L220 110 L220 134 L40 134 Z" fill="#4c1d95" opacity="0.6"/>
+          <path d="M40 120 L100 74 L140 104 L180 70 L220 110 L220 134 L40 134 Z" fill="#0a6f33" opacity="0.6"/>
         </svg>
         <pre><code>image_url: @{url_image_hero}
 scale: fill   (fill / fit / no_scale / stretch)</code></pre>
@@ -450,11 +466,11 @@ scale: fill   (fill / fit / no_scale / stretch)</code></pre>
       <div class="gb">
         <p>Một khối, hai hình: được chọn vs không chọn.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <rect x="14" y="30" width="110" height="90" rx="9" fill="#f3ecff" stroke="#7c3aed" stroke-width="2"/>
-          <circle cx="34" cy="52" r="7" fill="#7c3aed"/><text x="50" y="56" font-size="11" font-weight="700" fill="#4c1d95">Weekly</text>
-          <text x="30" y="92" font-size="10" fill="#6d28d9">selected</text>
+          <rect x="14" y="30" width="110" height="90" rx="9" fill="#eaf6ee" stroke="#0c8a3e" stroke-width="2"/>
+          <circle cx="34" cy="52" r="7" fill="#0c8a3e"/><text x="50" y="56" font-size="11" font-weight="700" fill="#0a6f33">Weekly</text>
+          <text x="30" y="92" font-size="10" fill="var(--primary-strong)">selected</text>
           <rect x="136" y="30" width="110" height="90" rx="9" fill="#fff" stroke="#e5e5e5" stroke-width="1.5"/>
-          <circle cx="156" cy="52" r="7" fill="none" stroke="#cbd0d8" stroke-width="2"/><text x="172" y="56" font-size="11" fill="#5b6675">Yearly</text>
+          <circle cx="156" cy="52" r="7" fill="none" stroke="#cbd0d8" stroke-width="2"/><text x="172" y="56" font-size="11" fill="#6b757e">Yearly</text>
           <text x="152" y="92" font-size="10" fill="#9aa3af">unselected</text>
         </svg>
         <pre><code>states: [selected, unselected]
@@ -467,10 +483,10 @@ default_state_id: selected</code></pre>
       <div class="gb">
         <p>Vạch ngăn cách giữa các khối.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <text x="20" y="44" font-size="12" fill="#1f2329">Mục A</text>
-          <line x1="20" y1="62" x2="240" y2="62" stroke="#e6e8ec" stroke-width="2"/>
-          <text x="20" y="92" font-size="12" fill="#1f2329">Mục B</text>
-          <line x1="20" y1="110" x2="240" y2="110" stroke="#e6e8ec" stroke-width="2"/>
+          <text x="20" y="44" font-size="12" fill="#14181c">Mục A</text>
+          <line x1="20" y1="62" x2="240" y2="62" stroke="#e4e6e2" stroke-width="2"/>
+          <text x="20" y="92" font-size="12" fill="#14181c">Mục B</text>
+          <line x1="20" y1="110" x2="240" y2="110" stroke="#e4e6e2" stroke-width="2"/>
         </svg>
         <pre><code>type: separator</code></pre>
       </div>
@@ -481,7 +497,7 @@ default_state_id: selected</code></pre>
       <div class="gb">
         <p>Một Container bo góc, có nền và gắn hành động khi chạm.</p>
         <svg viewBox="0 0 260 150" xmlns="http://www.w3.org/2000/svg">
-          <rect x="30" y="55" width="200" height="44" rx="12" fill="#a855f7"/>
+          <rect x="30" y="55" width="200" height="44" rx="12" fill="#2fa85c"/>
           <text x="120" y="82" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Start Free Trial</text>
           <text x="205" y="82" font-size="14" fill="#fff">→</text>
         </svg>
@@ -515,20 +531,20 @@ default_state_id: selected</code></pre>
   <figure>
   <svg viewBox="0 0 560 200" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
     <!-- left: child -->
-    <text x="140" y="24" font-size="12" font-weight="700" fill="#0ea371" text-anchor="middle">Ô tô đậm → thành CON</text>
-    <rect x="40" y="36" width="200" height="44" rx="6" fill="#e7f7f0" stroke="#0ea371" stroke-width="2"/>
-    <text x="140" y="62" font-size="12" fill="#0ea371" text-anchor="middle">Container đích (được tô)</text>
-    <rect x="70" y="92" width="140" height="34" rx="6" fill="#a855f7" opacity="0.92"/><text x="140" y="114" font-size="11" fill="#fff" text-anchor="middle">khối đang kéo ⤵</text>
-    <text x="140" y="150" font-size="11" fill="#5b6675" text-anchor="middle">→ nằm BÊN TRONG container đích</text>
+    <text x="140" y="24" font-size="12" font-weight="700" fill="#0c8a3e" text-anchor="middle">Ô tô đậm → thành CON</text>
+    <rect x="40" y="36" width="200" height="44" rx="6" fill="#eaf6ee" stroke="#0c8a3e" stroke-width="2"/>
+    <text x="140" y="62" font-size="12" fill="#0c8a3e" text-anchor="middle">Container đích (được tô)</text>
+    <rect x="70" y="92" width="140" height="34" rx="6" fill="#2fa85c" opacity="0.92"/><text x="140" y="114" font-size="11" fill="#fff" text-anchor="middle">khối đang kéo ⤵</text>
+    <text x="140" y="150" font-size="11" fill="#6b757e" text-anchor="middle">→ nằm BÊN TRONG container đích</text>
     <!-- divider -->
-    <line x1="300" y1="20" x2="300" y2="180" stroke="#e6e8ec"/>
+    <line x1="300" y1="20" x2="300" y2="180" stroke="#e4e6e2"/>
     <!-- right: reorder -->
     <text x="430" y="24" font-size="12" font-weight="700" fill="#2563eb" text-anchor="middle">Vạch mảnh → ĐỔI THỨ TỰ</text>
-    <rect x="340" y="36" width="180" height="30" rx="6" fill="#f7f8fa" stroke="#e6e8ec"/><text x="430" y="56" font-size="11" fill="#5b6675" text-anchor="middle">Khối A</text>
+    <rect x="340" y="36" width="180" height="30" rx="6" fill="#e9ebe6" stroke="#e4e6e2"/><text x="430" y="56" font-size="11" fill="#6b757e" text-anchor="middle">Khối A</text>
     <line x1="340" y1="76" x2="520" y2="76" stroke="#2563eb" stroke-width="3"/>
-    <rect x="356" y="84" width="148" height="28" rx="6" fill="#a855f7" opacity="0.92"/><text x="430" y="103" font-size="11" fill="#fff" text-anchor="middle">khối đang kéo</text>
-    <rect x="340" y="120" width="180" height="30" rx="6" fill="#f7f8fa" stroke="#e6e8ec"/><text x="430" y="140" font-size="11" fill="#5b6675" text-anchor="middle">Khối B</text>
-    <text x="430" y="172" font-size="11" fill="#5b6675" text-anchor="middle">→ chèn giữa A và B, cùng cấp</text>
+    <rect x="356" y="84" width="148" height="28" rx="6" fill="#2fa85c" opacity="0.92"/><text x="430" y="103" font-size="11" fill="#fff" text-anchor="middle">khối đang kéo</text>
+    <rect x="340" y="120" width="180" height="30" rx="6" fill="#e9ebe6" stroke="#e4e6e2"/><text x="430" y="140" font-size="11" fill="#6b757e" text-anchor="middle">Khối B</text>
+    <text x="430" y="172" font-size="11" fill="#6b757e" text-anchor="middle">→ chèn giữa A và B, cùng cấp</text>
   </svg>
   <figcaption>Quan sát chỉ báo khi thả: vùng tô đậm đưa khối vào trong; vạch kẻ mảnh chỉ sắp xếp lại thứ tự.</figcaption>
   </figure>
@@ -571,20 +587,20 @@ default_state_id: selected</code></pre>
 
   <figure>
   <svg viewBox="0 0 880 150" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
-    <rect x="14" y="18" width="270" height="114" rx="8" fill="#f7f8fa" stroke="#e6e8ec"/>
-    <text x="149" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#1f2329">wrap_content</text>
-    <rect x="100" y="56" width="98" height="40" rx="6" fill="#a855f7"/><text x="149" y="81" font-size="11" fill="#fff" text-anchor="middle">vừa nội dung</text>
-    <text x="149" y="120" font-size="11" text-anchor="middle" fill="#5b6675">to bằng đúng nội dung</text>
+    <rect x="14" y="18" width="270" height="114" rx="8" fill="#e9ebe6" stroke="#e4e6e2"/>
+    <text x="149" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#14181c">wrap_content</text>
+    <rect x="100" y="56" width="98" height="40" rx="6" fill="#2fa85c"/><text x="149" y="81" font-size="11" fill="#fff" text-anchor="middle">vừa nội dung</text>
+    <text x="149" y="120" font-size="11" text-anchor="middle" fill="#6b757e">to bằng đúng nội dung</text>
 
-    <rect x="304" y="18" width="270" height="114" rx="8" fill="#f7f8fa" stroke="#e6e8ec"/>
-    <text x="439" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#1f2329">match_parent</text>
-    <rect x="318" y="56" width="242" height="40" rx="6" fill="#7c3aed"/><text x="439" y="81" font-size="11" fill="#fff" text-anchor="middle">đầy khung cha</text>
-    <text x="439" y="120" font-size="11" text-anchor="middle" fill="#5b6675">kéo dài hết chỗ của cha</text>
+    <rect x="304" y="18" width="270" height="114" rx="8" fill="#e9ebe6" stroke="#e4e6e2"/>
+    <text x="439" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#14181c">match_parent</text>
+    <rect x="318" y="56" width="242" height="40" rx="6" fill="#0c8a3e"/><text x="439" y="81" font-size="11" fill="#fff" text-anchor="middle">đầy khung cha</text>
+    <text x="439" y="120" font-size="11" text-anchor="middle" fill="#6b757e">kéo dài hết chỗ của cha</text>
 
-    <rect x="594" y="18" width="270" height="114" rx="8" fill="#f7f8fa" stroke="#e6e8ec"/>
-    <text x="729" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#1f2329">fixed: 120</text>
-    <rect x="669" y="56" width="120" height="40" rx="6" fill="#c084fc"/><text x="729" y="81" font-size="11" fill="#fff" text-anchor="middle">cố định</text>
-    <text x="729" y="120" font-size="11" text-anchor="middle" fill="#5b6675">một số đo cụ thể (dp)</text>
+    <rect x="594" y="18" width="270" height="114" rx="8" fill="#e9ebe6" stroke="#e4e6e2"/>
+    <text x="729" y="40" font-size="12" font-weight="700" text-anchor="middle" fill="#14181c">fixed: 120</text>
+    <rect x="669" y="56" width="120" height="40" rx="6" fill="#3fbf6d"/><text x="729" y="81" font-size="11" fill="#fff" text-anchor="middle">cố định</text>
+    <text x="729" y="120" font-size="11" text-anchor="middle" fill="#6b757e">một số đo cụ thể (dp)</text>
   </svg>
   <figcaption>Ba kiểu chiều rộng/chiều cao của một khối.</figcaption>
   </figure>
@@ -598,10 +614,10 @@ default_state_id: selected</code></pre>
   <figure>
   <svg viewBox="0 0 560 230" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
     <rect x="20" y="20" width="520" height="190" rx="8" fill="#fdf2e2" stroke="#f5b86a" stroke-dasharray="5 4"/>
-    <text x="34" y="40" font-size="12" font-weight="700" fill="#b45309">margin — lề NGOÀI (đẩy khối ra xa khối khác)</text>
-    <rect x="70" y="58" width="420" height="130" rx="8" fill="#e7f7f0" stroke="#67c9a3"/>
-    <text x="84" y="78" font-size="12" font-weight="700" fill="#0ea371">padding — đệm TRONG (đẩy nội dung vào)</text>
-    <rect x="130" y="96" width="300" height="74" rx="6" fill="#7c3aed"/>
+    <text x="34" y="40" font-size="12" font-weight="700" fill="#b06f00">margin — lề NGOÀI (đẩy khối ra xa khối khác)</text>
+    <rect x="70" y="58" width="420" height="130" rx="8" fill="#eaf6ee" stroke="#67c9a3"/>
+    <text x="84" y="78" font-size="12" font-weight="700" fill="#0c8a3e">padding — đệm TRONG (đẩy nội dung vào)</text>
+    <rect x="130" y="96" width="300" height="74" rx="6" fill="#0c8a3e"/>
     <text x="280" y="138" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Nội dung</text>
   </svg>
   <figcaption>margin nằm ngoài viền khối; padding nằm trong viền, ôm lấy nội dung.</figcaption>
@@ -632,29 +648,29 @@ default_state_id: selected</code></pre>
     <rect x="182" y="22" width="196" height="34" rx="7" fill="#eaf1ff" stroke="#9cbcf5"/>
     <text x="280" y="43" font-size="11" fill="#2563eb" text-anchor="middle">[0] Header — ✕ + Restore</text>
     <!-- middle -->
-    <rect x="182" y="62" width="196" height="150" rx="7" fill="#f3ecff" stroke="#c4a7f0"/>
-    <text x="280" y="80" font-size="11" fill="#6d28d9" text-anchor="middle" font-weight="700">[1] Giữa (weight:1)</text>
-    <text x="280" y="96" font-size="10" fill="#7c3aed" text-anchor="middle">tiêu đề + ảnh</text>
-    <rect x="206" y="106" width="148" height="92" rx="6" fill="#a855f7"/>
+    <rect x="182" y="62" width="196" height="150" rx="7" fill="#eaf6ee" stroke="#9ccfae"/>
+    <text x="280" y="80" font-size="11" fill="var(--primary-strong)" text-anchor="middle" font-weight="700">[1] Giữa (weight:1)</text>
+    <text x="280" y="96" font-size="10" fill="#0c8a3e" text-anchor="middle">tiêu đề + ảnh</text>
+    <rect x="206" y="106" width="148" height="92" rx="6" fill="#2fa85c"/>
     <text x="280" y="156" font-size="10" fill="#fff" text-anchor="middle">ảnh weight:1 → tự nở ↕</text>
     <!-- content -->
-    <rect x="182" y="218" width="196" height="64" rx="7" fill="#e7f7f0" stroke="#67c9a3"/>
-    <text x="280" y="236" font-size="11" fill="#0ea371" text-anchor="middle" font-weight="700">[2] Nội dung</text>
-    <text x="280" y="252" font-size="10" fill="#0ea371" text-anchor="middle">tính năng + thẻ gói</text>
+    <rect x="182" y="218" width="196" height="64" rx="7" fill="#eaf6ee" stroke="#67c9a3"/>
+    <text x="280" y="236" font-size="11" fill="#0c8a3e" text-anchor="middle" font-weight="700">[2] Nội dung</text>
+    <text x="280" y="252" font-size="10" fill="#0c8a3e" text-anchor="middle">tính năng + thẻ gói</text>
     <rect x="206" y="258" width="148" height="16" rx="4" fill="#b7ecd6"/>
     <!-- cta -->
     <rect x="182" y="288" width="196" height="50" rx="7" fill="#fdf2e2" stroke="#f5b86a"/>
-    <rect x="200" y="296" width="160" height="24" rx="8" fill="#7c3aed"/><text x="280" y="312" font-size="10" fill="#fff" text-anchor="middle">Start Free Trial →</text>
-    <text x="280" y="333" font-size="9" fill="#b45309" text-anchor="middle">[3] CTA + Footer (dính đáy)</text>
+    <rect x="200" y="296" width="160" height="24" rx="8" fill="#0c8a3e"/><text x="280" y="312" font-size="10" fill="#fff" text-anchor="middle">Start Free Trial →</text>
+    <text x="280" y="333" font-size="9" fill="#b06f00" text-anchor="middle">[3] CTA + Footer (dính đáy)</text>
     <!-- labels left -->
-    <text x="20" y="44" font-size="11" fill="#5b6675">wrap</text>
-    <text x="20" y="140" font-size="11" fill="#5b6675">nở</text>
-    <text x="20" y="252" font-size="11" fill="#5b6675">wrap</text>
-    <text x="20" y="316" font-size="11" fill="#5b6675">wrap</text>
+    <text x="20" y="44" font-size="11" fill="#6b757e">wrap</text>
+    <text x="20" y="140" font-size="11" fill="#6b757e">nở</text>
+    <text x="20" y="252" font-size="11" fill="#6b757e">wrap</text>
+    <text x="20" y="316" font-size="11" fill="#6b757e">wrap</text>
     <!-- tall device arrow -->
-    <line x1="420" y1="70" x2="420" y2="205" stroke="#a855f7" stroke-width="2" marker-end="url(#ah)" marker-start="url(#ah)"/>
-    <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#a855f7"/></marker></defs>
-    <text x="470" y="140" font-size="10" fill="#7c3aed" text-anchor="middle" transform="rotate(90 470 140)">chỗ thừa dồn vào ảnh</text>
+    <line x1="420" y1="70" x2="420" y2="205" stroke="#2fa85c" stroke-width="2" marker-end="url(#ah)" marker-start="url(#ah)"/>
+    <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#2fa85c"/></marker></defs>
+    <text x="470" y="140" font-size="10" fill="#0c8a3e" text-anchor="middle" transform="rotate(90 470 140)">chỗ thừa dồn vào ảnh</text>
   </svg>
   <figcaption>Bộ khung 4 phần: Header và CTA cố định ở trên/dưới, phần Giữa (cùng ảnh) mang <code>weight:1</code> nên tự nở lấp chỗ thừa trên màn cao.</figcaption>
   </figure>
@@ -673,7 +689,7 @@ default_state_id: selected</code></pre>
   <table>
     <thead><tr><th>Loại nền</th><th>Mô tả</th></tr></thead>
     <tbody>
-      <tr><td><strong>Solid</strong> (màu đặc)</td><td>Một màu, ví dụ <code>#7C3AED</code>. Có thể thêm độ trong suốt bằng mã 8 ký tự <code>#AARRGGBB</code> (ví dụ <code>#1A7C3AED</code> = tím 10%).</td></tr>
+      <tr><td><strong>Solid</strong> (màu đặc)</td><td>Một màu, ví dụ <code>#0C8A3E</code>. Có thể thêm độ trong suốt bằng mã 8 ký tự <code>#AARRGGBB</code> (ví dụ <code>#1A0C8A3E</code> = tím 10%).</td></tr>
       <tr><td><strong>Gradient</strong> (chuyển màu)</td><td>Hai màu trở lên + góc nghiêng. 0° = trên→dưới, 90° = trái→phải.</td></tr>
       <tr><td><strong>Image</strong> (ảnh nền)</td><td>Dùng một ảnh làm nền.</td></tr>
     </tbody>
@@ -681,29 +697,29 @@ default_state_id: selected</code></pre>
   <p>Một khối có thể có <strong>nhiều lớp nền</strong> chồng lên nhau (lớp đầu mảng nằm dưới cùng).</p>
   <div class="fig-row">
     <figure>
-      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="10" fill="#7c3aed"/></svg>
-      <figcaption>Solid · <code>#7C3AED</code></figcaption>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="10" fill="#0c8a3e"/></svg>
+      <figcaption>Solid · <code>#0C8A3E</code></figcaption>
     </figure>
     <figure>
-      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><rect x="20" y="18" width="160" height="74" rx="10" fill="url(#g1)"/></svg>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#0c8a3e"/></linearGradient></defs><rect x="20" y="18" width="160" height="74" rx="10" fill="url(#g1)"/></svg>
       <figcaption>Gradient · 2 màu, góc 45°</figcaption>
     </figure>
     <figure>
-      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="10" fill="#1A7C3AED"/><text x="100" y="60" font-size="11" fill="#7c3aed" text-anchor="middle">tím 10%</text></svg>
-      <figcaption>Trong suốt · <code>#1A7C3AED</code></figcaption>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="10" fill="#1A0C8A3E"/><text x="100" y="60" font-size="11" fill="#0c8a3e" text-anchor="middle">tím 10%</text></svg>
+      <figcaption>Trong suốt · <code>#1A0C8A3E</code></figcaption>
     </figure>
   </div>
   <div class="fig-row">
     <figure>
-      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="4" fill="#fff" stroke="#7c3aed" stroke-width="2"/></svg>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="4" fill="#fff" stroke="#0c8a3e" stroke-width="2"/></svg>
       <figcaption>corner_radius nhỏ · stroke tím 2dp</figcaption>
     </figure>
     <figure>
-      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="22" fill="#f3ecff" stroke="#c4a7f0"/></svg>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="20" y="18" width="160" height="74" rx="22" fill="#eaf6ee" stroke="#9ccfae"/></svg>
       <figcaption>corner_radius lớn · bo tròn</figcaption>
     </figure>
     <figure>
-      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="22" y="22" width="160" height="74" rx="12" fill="#7c3aed" opacity="0.18"/><rect x="20" y="18" width="160" height="74" rx="12" fill="#fff" stroke="#e6e8ec"/><text x="100" y="60" font-size="11" fill="#5b6675" text-anchor="middle">has_shadow</text></svg>
+      <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg"><rect x="22" y="22" width="160" height="74" rx="12" fill="#0c8a3e" opacity="0.18"/><rect x="20" y="18" width="160" height="74" rx="12" fill="#fff" stroke="#e4e6e2"/><text x="100" y="60" font-size="11" fill="#6b757e" text-anchor="middle">has_shadow</text></svg>
       <figcaption>Bóng đổ · <code>has_shadow</code></figcaption>
     </figure>
   </div>
@@ -730,15 +746,15 @@ default_state_id: selected</code></pre>
   </table>
   <figure>
   <svg viewBox="0 0 560 130" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
-    <text x="20" y="40" font-size="22" font-weight="300" fill="#1f2329">Aa</text><text x="70" y="40" font-size="13" fill="#5b6675">light</text>
-    <text x="160" y="40" font-size="22" font-weight="400" fill="#1f2329">Aa</text><text x="210" y="40" font-size="13" fill="#5b6675">regular</text>
-    <text x="320" y="40" font-size="22" font-weight="500" fill="#1f2329">Aa</text><text x="370" y="40" font-size="13" fill="#5b6675">medium</text>
-    <text x="470" y="40" font-size="22" font-weight="700" fill="#1f2329">Aa</text><text x="510" y="40" font-size="13" fill="#5b6675">bold</text>
-    <text x="20" y="86" font-size="13" fill="#5b6675">Cỡ:</text>
-    <text x="60" y="90" font-size="12" fill="#1f2329">12</text>
-    <text x="110" y="92" font-size="16" fill="#1f2329">16</text>
-    <text x="170" y="96" font-size="22" font-weight="700" fill="#1f2329">22</text>
-    <text x="250" y="100" font-size="30" font-weight="700" fill="#7c3aed">30</text>
+    <text x="20" y="40" font-size="22" font-weight="300" fill="#14181c">Aa</text><text x="70" y="40" font-size="13" fill="#6b757e">light</text>
+    <text x="160" y="40" font-size="22" font-weight="400" fill="#14181c">Aa</text><text x="210" y="40" font-size="13" fill="#6b757e">regular</text>
+    <text x="320" y="40" font-size="22" font-weight="500" fill="#14181c">Aa</text><text x="370" y="40" font-size="13" fill="#6b757e">medium</text>
+    <text x="470" y="40" font-size="22" font-weight="700" fill="#14181c">Aa</text><text x="510" y="40" font-size="13" fill="#6b757e">bold</text>
+    <text x="20" y="86" font-size="13" fill="#6b757e">Cỡ:</text>
+    <text x="60" y="90" font-size="12" fill="#14181c">12</text>
+    <text x="110" y="92" font-size="16" fill="#14181c">16</text>
+    <text x="170" y="96" font-size="22" font-weight="700" fill="#14181c">22</text>
+    <text x="250" y="100" font-size="30" font-weight="700" fill="#0c8a3e">30</text>
   </svg>
   <figcaption>Bốn mức độ đậm và một vài cỡ chữ.</figcaption>
   </figure>

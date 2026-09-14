@@ -116,6 +116,32 @@ const html = readFileSync(FILE, 'utf-8');
     ok(html.includes('iKame NoCode'), 'Tài liệu gọi đúng tên sản phẩm');
 }
 
+// ── 5b. Bảng màu: không còn tông tím của bản gốc ─────────────────────────
+// Tài liệu lấy màu từ app (xanh lá). Kiểm theo SẮC ĐỘ chứ không theo danh sách
+// mã màu: lần đổi theme tôi đã bỏ sót #a855f7 chỉ vì nó không nằm trong danh
+// sách tôi tự nghĩ ra. Sắc độ thì không bỏ sót được cái nào.
+{
+    const hue = (hex) => {
+        let h = hex.slice(1);
+        if (h.length === 8) h = h.slice(2);       // #AARRGGBB của DivKit
+        if (h.length === 3) h = [...h].map((c) => c + c).join('');
+        if (h.length !== 6) return null;
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+        const mx = Math.max(r, g, b);
+        const mn = Math.min(r, g, b);
+        if (mx === mn) return null;               // xám, không có sắc
+        const d = mx - mn;
+        if (mx === r) return ((60 * ((g - b) / d)) % 360 + 360) % 360;
+        if (mx === g) return 60 * ((b - r) / d) + 120;
+        return 60 * ((r - g) / d) + 240;
+    };
+    const purple = [...html.matchAll(/#[0-9a-fA-F]{3,8}\b/g)]
+        .map((m) => m[0])
+        .filter((c) => { const x = hue(c); return x !== null && x >= 250 && x <= 310; });
+    ok(purple.length === 0, 'Không còn màu tông tím',
+        `còn: ${[...new Set(purple)]}`);
+}
+
 // ── 6. Đối chiếu từ vựng DivKit (bỏ qua nếu không có bộ docs) ───────────
 // Docs sinh ra từ api_generator của DivKit và nằm ngoài repo, nên đây là kiểm
 // tra "có thì tốt": chạy được ở máy ai có checkout divkit, bỏ qua ở CI.
