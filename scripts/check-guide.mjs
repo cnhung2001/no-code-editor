@@ -68,6 +68,21 @@ const html = readFileSync(FILE, 'utf-8');
     for (const a of fromCode) ok(ids.has(a), `Neo "${a}" mà code trỏ tới vẫn còn`);
 }
 
+// ── 2b. Neo lúc mở trang phải nhảy được ──────────────────────────────────
+// `html{scroll-behavior:smooth}` vô hiệu hoá cú nhảy tới #neo lúc TẢI trang
+// trên Chrome: /help/quy-trinh mở ra vẫn nằm ở đầu tài liệu. Đo trên chính
+// file này: smooth → scrollY=0, auto → scrollY=26543 (đúng vị trí mục 13).
+// Smooth vẫn được, nhưng chỉ sau khi 'load' xong — qua class .ready.
+{
+    const rule = /html\s*{[^}]*scroll-behavior\s*:\s*smooth/.test(html);
+    ok(!rule, 'html không bật scroll-behavior:smooth vô điều kiện',
+        'smooth trên html nuốt cú nhảy tới #neo lúc tải trang — dùng html.ready');
+
+    const hasReady = /html\.ready\s*{[^}]*scroll-behavior\s*:\s*smooth/.test(html);
+    const setsReady = /classList\.add\('ready'\)/.test(html);
+    ok(!hasReady || setsReady, 'Có .ready trong CSS thì phải có JS gắn class đó');
+}
+
 // ── 3. Ảnh có thật ───────────────────────────────────────────────────────
 {
     const imgs = [...new Set([...html.matchAll(/src="(images\/[^"]+)"/g)].map((m) => m[1]))];

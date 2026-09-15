@@ -31,7 +31,12 @@
     --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;
   }
   *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
+  /* Smooth CHỈ bật sau khi trang load xong (class .ready ở cuối body).
+     Để smooth ngay từ đầu là Chrome nuốt luôn cú nhảy tới #neo lúc mở trang:
+     /help/quy-trinh mở ra vẫn nằm ở đầu tài liệu, người đọc tự đi tìm mục 13.
+     Đo tại chỗ trên chính file này: smooth → scrollY=0, auto → scrollY=26543. */
+  html{scroll-behavior:auto}
+  html.ready{scroll-behavior:smooth}
   body{margin:0;font-family:var(--sans);color:var(--text);background:var(--bg);line-height:1.65;font-size:16px}
   a{color:var(--primary);text-decoration:none}
   a:hover{text-decoration:underline}
@@ -1050,6 +1055,16 @@ then @{weekly_trial}/week     →  "then $2.99/week"</code></pre>
     });
   }, {rootMargin:'-10% 0px -75% 0px', threshold:0});
   Object.keys(map).forEach(function(id){ obs.observe(document.getElementById(id)); });
+
+  // Neo lúc mở trang: chỉnh lại MỘT lần sau 'load', rồi mới bật smooth.
+  // Lúc parse xong, 9 ảnh chưa có kích thước nên tài liệu còn ngắn — trình duyệt
+  // nhảy tới #neo theo bố cục cũ, ảnh về sau đẩy nội dung xuống và người đọc
+  // lệch mất vài nghìn pixel. Đợi 'load' là mọi ảnh đã chiếm đúng chỗ.
+  window.addEventListener('load', function(){
+    var el = location.hash && document.getElementById(location.hash.slice(1));
+    if (el) el.scrollIntoView();
+    document.documentElement.classList.add('ready');
+  });
 </script>
 </body>
 </html>
