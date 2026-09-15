@@ -26,11 +26,6 @@ export function HelpScreen({ anchor, onBack }: Props) {
             <header className="help-head">
                 <button className="link-back" onClick={onBack}>{Icon.back} Quay lại</button>
                 <span className="help-title">Hướng dẫn dựng UI</span>
-                {/* Vẫn để một đường mở tab riêng: đọc tài liệu CẠNH editor là nhu
-                    cầu thật, chỉ là không được ép ai cũng phải làm vậy. */}
-                <a className="btn ghost sm" href={src} target="_blank" rel="noopener">
-                    {Icon.external} Mở tab mới
-                </a>
             </header>
             <iframe className="help-frame" src={src} title="Hướng dẫn dựng UI" />
         </main>

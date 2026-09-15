@@ -334,8 +334,6 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-
 .help { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg); }
 .help-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .help-title { font-weight: 600; }
-/* Nút "Mở tab mới" dồn về phải, tách khỏi nhóm điều hướng bên trái. */
-.help-head .btn { margin-left: auto; }
 /* Tài liệu tự cuộn BÊN TRONG iframe; khung ngoài không được cuộn theo, nếu
    không sẽ có hai thanh cuộn lồng nhau. */
 .help-frame { flex: 1; width: 100%; border: 0; display: block; }
