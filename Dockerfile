@@ -29,6 +29,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
+# public/ là publicDir của Vite — copy nguyên si vào dist/. Thiếu nó thì
+# /huong-dan/index.html không có thật, Express rơi xuống SPA fallback và trả
+# index.html: iframe Hướng dẫn nạp lại chính app, ra màn trắng + Back loạn.
+COPY public ./public
 # VITE_* là BUILD-TIME: đổi giá trị = phải build lại image, không phải đổi env container.
 ARG VITE_API_BASE=/api
 ARG VITE_CDN_BASE=
@@ -44,6 +48,10 @@ RUN npm run build
 # gấp ba, nên phải chặn ở đây chứ không trông vào ai đó soi bundle.
 RUN ! grep -q 'div-container.json' dist/assets/index-*.js \
     || { echo 'BUILD BROKEN: schema DivKit lọt vào chunk eager — import từ dist/preview.js, đừng import barrel'; exit 1; }
+# Fail fast: tài liệu Hướng dẫn phải là file THẬT trong dist. Thiếu nó thì không
+# có lỗi nào nổ ra — SPA fallback vẫn trả 200, chỉ là trả nhầm app cho iframe.
+RUN test -f dist/huong-dan/index.html \
+    || { echo 'BUILD BROKEN: thiếu dist/huong-dan — public/ chưa được COPY vào stage này'; exit 1; }
 
 # ── 3. Deps của server (cần token registry @ikameglobal) ─────────────────
 FROM node:22-alpine AS server-deps
